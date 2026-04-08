@@ -1,0 +1,186 @@
+const DIFFICULTY_MULTIPLIERS = {
+  Lako: 1,
+  Srednje: 1.35,
+  Tesko: 1.75,
+}
+
+const normalizeNumber = (value) => Math.max(0, Number(value) || 0)
+
+const applyDifficultyMultiplier = (value, difficulty = 'Lako') => {
+  const multiplier = DIFFICULTY_MULTIPLIERS[difficulty] || 1
+  return Math.max(0, Math.round(normalizeNumber(value) * multiplier))
+}
+
+export const getDifficultyMultiplier = (difficulty = 'Lako') =>
+  DIFFICULTY_MULTIPLIERS[difficulty] || 1
+
+export const calculateAssociationReward = ({
+  difficulty = 'Lako',
+  totalClues = 4,
+  revealedCount = 1,
+  hintUsed = false,
+}) => {
+  const hiddenClueBonus = Math.max(0, totalClues - revealedCount) * 7
+  const cleanSolveBonus = hintUsed ? 0 : 6
+
+  return applyDifficultyMultiplier(24 + hiddenClueBonus + cleanSolveBonus, difficulty)
+}
+
+export const calculateLogicReward = ({
+  difficulty = 'Lako',
+  mode = 'concept',
+  hintUsed = false,
+}) => {
+  const modeBonus = mode === 'odd-one-out' ? 30 : 26
+  const cleanSolveBonus = hintUsed ? 0 : 8
+
+  return applyDifficultyMultiplier(modeBonus + cleanSolveBonus, difficulty)
+}
+
+export const calculateRelationReward = ({
+  difficulty = 'Lako',
+  hintUsed = false,
+}) => {
+  const cleanSolveBonus = hintUsed ? 0 : 5
+  return applyDifficultyMultiplier(18 + cleanSolveBonus, difficulty)
+}
+
+export const calculateWordChainReward = ({
+  difficulty = 'Lako',
+  validNodes = 0,
+  representedRelations = 0,
+  hasMinimumNodes = false,
+  hasAllRelations = false,
+  accuracy = 0,
+}) => {
+  const structureBonus = hasMinimumNodes ? 24 : 0
+  const relationBonus = hasAllRelations ? 28 : 0
+  const accuracyBonus = accuracy >= 80 ? 12 : accuracy >= 60 ? 6 : 0
+  const rawScore =
+    normalizeNumber(validNodes) * 12 +
+    normalizeNumber(representedRelations) * 18 +
+    structureBonus +
+    relationBonus +
+    accuracyBonus
+
+  return applyDifficultyMultiplier(rawScore, difficulty)
+}
+
+export const calculatePerformanceBonus = ({
+  difficulty = 'Lako',
+  total = 0,
+  correct = 0,
+  time = 0,
+  hintCount = 0,
+  type = 'association',
+}) => {
+  const safeTotal = normalizeNumber(total)
+  const safeCorrect = normalizeNumber(correct)
+  const safeTime = normalizeNumber(time)
+  const safeHints = normalizeNumber(hintCount)
+
+  if (!safeTotal || !safeCorrect) {
+    return 0
+  }
+
+  const accuracy = Math.round((safeCorrect / safeTotal) * 100)
+  const timePerRound = safeTotal > 0 ? safeTime / safeTotal : safeTime
+
+  let accuracyBonus = 0
+  if (accuracy === 100) {
+    accuracyBonus = 24
+  } else if (accuracy >= 75) {
+    accuracyBonus = 16
+  } else if (accuracy >= 50) {
+    accuracyBonus = 8
+  }
+
+  let speedBonus = 0
+  if (timePerRound > 0 && timePerRound <= 10) {
+    speedBonus = 18
+  } else if (timePerRound <= 18) {
+    speedBonus = 10
+  } else if (timePerRound <= 26) {
+    speedBonus = 4
+  }
+
+  const cleanRunBonus = safeHints === 0 ? 10 : safeHints <= 1 ? 4 : 0
+  const modeBonus =
+    type === 'logic-odd-one-out'
+      ? 8
+      : type === 'word-chain'
+        ? 12
+        : type === 'relation'
+          ? 6
+          : 0
+
+  return applyDifficultyMultiplier(
+    accuracyBonus + speedBonus + cleanRunBonus + modeBonus,
+    difficulty
+  )
+}
+
+export const buildResultBadges = (result = {}) => {
+  const total = normalizeNumber(result.total)
+  const correct = normalizeNumber(result.correct)
+  const accuracy = normalizeNumber(result.accuracy)
+  const time = normalizeNumber(result.time)
+  const hintCount = normalizeNumber(result.hintCount)
+  const awardedPoints = normalizeNumber(
+    result.awardedPoints ?? result.earnedPoints ?? 0
+  )
+  const difficulty = result.difficulty || 'Lako'
+  const type = result.type || 'association'
+  const perRoundTime = total > 0 ? time / total : time
+  const badges = []
+
+  if (total > 0 && perRoundTime > 0 && perRoundTime <= 18) {
+    badges.push({ key: 'speed', label: 'Brzi mislilac', tone: 'sand' })
+  }
+
+  if (total > 0 && accuracy === 100) {
+    badges.push({ key: 'perfect', label: 'Nepogresiv', tone: 'green' })
+  }
+
+  if (total > 0 && hintCount === 0) {
+    badges.push({ key: 'clean', label: 'Bez pomoci', tone: 'blue' })
+  }
+
+  if (difficulty === 'Tesko') {
+    badges.push({ key: 'hard', label: 'Teski igrac', tone: 'violet' })
+  }
+
+  if (result.isDaily) {
+    badges.push({ key: 'daily', label: 'Daily heroj', tone: 'teal' })
+  }
+
+  if (awardedPoints >= 150) {
+    badges.push({ key: 'xp', label: 'XP nalet', tone: 'gold' })
+  }
+
+  if (normalizeNumber(result.performanceBonus) >= 20) {
+    badges.push({ key: 'performance', label: 'Top forma', tone: 'violet' })
+  }
+
+  if ((type === 'logic' || type === 'logic-odd-one-out') && accuracy >= 75) {
+    badges.push({ key: 'logic', label: 'Logicar', tone: 'blue' })
+  }
+
+  if (type === 'association' && correct >= Math.max(1, Math.ceil(total / 2))) {
+    badges.push({ key: 'association', label: 'Asocijator', tone: 'sand' })
+  }
+
+  if (type === 'relation' && accuracy >= 75) {
+    badges.push({ key: 'relation', label: 'Veza majstor', tone: 'teal' })
+  }
+
+  if (type === 'word-chain' && accuracy >= 80) {
+    badges.push({ key: 'chain', label: 'Lanac majstor', tone: 'red' })
+  }
+
+  if (!badges.length) {
+    badges.push({ key: 'starter', label: 'U zagrijavanju', tone: 'slate' })
+  }
+
+  return badges.slice(0, 6)
+}
