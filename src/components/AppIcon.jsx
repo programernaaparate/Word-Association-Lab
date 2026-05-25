@@ -53,6 +53,22 @@ function AppIcon({ name, className = '', size = 20 }) {
         </IconFrame>
       )
 
+    case 'arrow-down':
+      return (
+        <IconFrame className={className} size={size}>
+          <path d="M12 5v14" />
+          <path d="M6 13l6 6 6-6" />
+        </IconFrame>
+      )
+
+    case 'arrow-up':
+      return (
+        <IconFrame className={className} size={size}>
+          <path d="M12 19V5" />
+          <path d="M18 11l-6-6-6 6" />
+        </IconFrame>
+      )
+
     case 'logout':
       return (
         <IconFrame className={className} size={size}>
@@ -102,6 +118,16 @@ function AppIcon({ name, className = '', size = 20 }) {
           <path d="M7 15v-4" />
           <path d="M12 15V9" />
           <path d="M17 15V6" />
+        </IconFrame>
+      )
+
+    case 'guide':
+      return (
+        <IconFrame className={className} size={size}>
+          <path d="M5.5 6.5A2.5 2.5 0 0 1 8 4h10.5v14H8a2.5 2.5 0 0 0-2.5 2.5Z" />
+          <path d="M5.5 6.5v13A2.5 2.5 0 0 1 8 17h10.5" />
+          <path d="M9.5 8.5h5.5" />
+          <path d="M9.5 11.5h5.5" />
         </IconFrame>
       )
 

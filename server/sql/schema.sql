@@ -1,5 +1,8 @@
-CREATE DATABASE IF NOT EXISTS word_association_lab;
+CREATE DATABASE IF NOT EXISTS word_association_lab
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
 USE word_association_lab;
+SET NAMES utf8mb4;
 
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -15,6 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS association_words (
   id INT AUTO_INCREMENT PRIMARY KEY,
   word VARCHAR(120) NOT NULL,
+  symbol VARCHAR(24) NULL,
   category VARCHAR(80) NOT NULL,
   difficulty VARCHAR(40) NOT NULL,
   clues_json JSON NOT NULL,
@@ -109,10 +113,11 @@ CREATE TABLE IF NOT EXISTS support_messages (
   CONSTRAINT fk_support_message_recipient FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-INSERT INTO association_words (word, category, difficulty, clues_json, hint, accepted_answers_json)
+INSERT INTO association_words (word, symbol, category, difficulty, clues_json, hint, accepted_answers_json)
 SELECT * FROM (
   SELECT
     'Sunce',
+    '☀️',
     'Priroda',
     'Lako',
     JSON_ARRAY('Dan', 'Toplota', 'Svjetlost', 'Ljeto'),

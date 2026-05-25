@@ -3,6 +3,7 @@ import BottomNav from '../components/BottomNav'
 import Navbar from '../components/Navbar'
 import { buildResultBadges, getDifficultyMultiplier } from '../utils/gameRewards'
 import { getCurrentUser, getLastResult, getLevelProgress } from '../utils/storage'
+import { getLevelTheme } from '../utils/levelTheme'
 
 function ResultsPage() {
   const navigate = useNavigate()
@@ -20,24 +21,33 @@ function ResultsPage() {
   const difficulty = result?.difficulty || 'Lako'
   const category = result?.category || 'Sve'
   const performanceBonus = Math.max(0, result?.performanceBonus ?? 0)
+  const wrongAttempts = Math.max(0, Number(result?.wrongAttempts ?? 0) || 0)
+  const partialCount = Math.max(0, Number(result?.partialCount ?? 0) || 0)
   const totalUserPoints = currentUser?.points ?? 0
   const levelData = getLevelProgress(totalUserPoints)
+  const levelTheme = getLevelTheme(levelData.level)
   const earnedPoints = Math.max(0, result?.earnedPoints ?? 0)
   const totalAwardedPoints = earnedPoints + dailyReward
   const displayScore = Math.max(0, result?.awardedPoints ?? totalAwardedPoints)
   const difficultyMultiplier = getDifficultyMultiplier(difficulty)
   const earnedBadges = buildResultBadges(result)
   const hasAnyCorrectAnswer = correct > 0
+  const hasAnyPartialAnswer =
+    partialCount > 0 || answers.some((item) => Boolean(item.partialAccepted))
   const hasSubmittedAnswer = answers.some(
     (item) => item.answer && item.answer.trim() && item.answer !== '(bez odgovora)'
   )
   const resultTitle = hasAnyCorrectAnswer
     ? 'Svaka cast!'
+    : hasAnyPartialAnswer
+      ? 'Blizu si'
     : hasSubmittedAnswer
       ? 'Pokusaj ponovo'
       : 'Nema unesenog odgovora'
   const resultSubtitle = hasAnyCorrectAnswer
     ? 'Zavrsio si tip igre:'
+    : hasAnyPartialAnswer
+      ? 'Odgovor je bio povezan, ali ne i najprecizniji za tip igre:'
     : hasSubmittedAnswer
       ? 'Ova partija nije imala tacan odgovor za tip igre:'
       : 'Partija je zavrsena bez unesenog odgovora za tip igre:'
@@ -151,9 +161,25 @@ function ResultsPage() {
                       <small>TRAGOVI / POJAM</small>
                       <strong>{getAnswerPrompt(item)}</strong>
                       <small>TVOJ ODGOVOR</small>
-                      <span className={item.accepted === false ? 'wrong-text' : ''}>
+                      <span
+                        className={
+                          item.accepted
+                            ? ''
+                            : item.partialAccepted
+                              ? 'link-text'
+                              : item.accepted === false
+                                ? 'wrong-text'
+                                : ''
+                        }
+                      >
                         {item.answer}
                       </span>
+                      {item.partialAccepted ? (
+                        <>
+                          <small>PROCJENA</small>
+                          <span>Djelimicno tacno</span>
+                        </>
+                      ) : null}
                       {item.solution ? (
                         <>
                           <small>TACNO RJESENJE</small>
@@ -202,7 +228,7 @@ function ResultsPage() {
                 </div>
               </div>
 
-              <div className="level-card">
+              <div className={`level-card level-hero-card ${levelTheme.tier}`}>
                 <div className="section-row">
                   <h3>Nivo progres</h3>
                   <span>
@@ -223,6 +249,8 @@ function ResultsPage() {
                 <p><strong>Kategorija:</strong> {category}</p>
                 <p><strong>Izabrana tezina:</strong> {difficulty}</p>
                 <p><strong>Tezinski bonus:</strong> x{difficultyMultiplier.toFixed(2)}</p>
+                <p><strong>Netacnih pokusaja:</strong> {wrongAttempts}</p>
+                <p><strong>Djelimicno tacnih:</strong> {partialCount}</p>
                 <p><strong>Iskoriscenih hintova:</strong> {hintCount}</p>
                 <p><strong>Zaradjen XP u partiji:</strong> +{earnedPoints}</p>
                 <p><strong>Bonus performansi:</strong> +{performanceBonus}</p>
@@ -235,7 +263,11 @@ function ResultsPage() {
                   Pokusaj ponovo
                 </button>
 
-                <button className="share-btn" type="button" onClick={() => navigate('/home')}>
+                <button
+                  className="secondary-btn"
+                  type="button"
+                  onClick={() => navigate('/home')}
+                >
                   Nazad
                 </button>
               </div>

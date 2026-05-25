@@ -15,6 +15,7 @@ import {
   getCurrentUser,
   getDifficulty,
   getRelationChallengesByDifficulty,
+  getRotatedSessionItemIds,
   isExpiredDailySession,
   saveActiveSession,
   saveLastResult,
@@ -38,22 +39,52 @@ const mergeRelationPools = (primaryItems = [], fallbackItems = []) => {
   return Array.from(itemMap.values())
 }
 
-const shuffleItems = (items = []) => {
-  const nextItems = [...items]
+const buildRelationChallengeKey = (item = {}) =>
+  `${item.leftWord || ''}-${item.rightWord || ''}-${item.relation || ''}-${item.category || ''}-${item.difficulty || ''}`
 
-  for (let index = nextItems.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1))
-    ;[nextItems[index], nextItems[swapIndex]] = [nextItems[swapIndex], nextItems[index]]
-  }
+const remapRelationSessionChallengesToPool = (sessionChallenges = [], poolChallenges = []) =>
+  (sessionChallenges || [])
+    .map((savedChallenge) => {
+      const savedKey = buildRelationChallengeKey(savedChallenge)
 
-  return nextItems
+      return (
+        poolChallenges.find(
+          (item) =>
+            (savedChallenge.id && item.id === savedChallenge.id) ||
+            buildRelationChallengeKey(item) === savedKey
+        ) || savedChallenge
+      )
+    })
+    .filter(Boolean)
+
+const pickRelationSessionChallenges = ({ challenges = [], difficulty, category, count = 5 }) => {
+  const selectedIds = getRotatedSessionItemIds({
+    gameType: 'relation',
+    difficulty,
+    category,
+    items: challenges,
+    count: Math.min(count, challenges.length),
+  })
+  const selectedChallenges = selectedIds
+    .map((itemId) => challenges.find((item) => item.id === itemId))
+    .filter(Boolean)
+
+  return selectedChallenges.length ? selectedChallenges : challenges.slice(0, count)
 }
 
 function RelationGamePage() {
   const navigate = useNavigate()
-  const difficulty = getDifficulty()
-  const category = getCategory()
   const activeSession = getActiveSession()
+  const selectedDifficulty = getDifficulty()
+  const selectedCategory = getCategory()
+  const difficulty =
+    activeSession?.type === 'relation' && !activeSession?.isDaily
+      ? activeSession.sessionDifficulty || selectedDifficulty
+      : selectedDifficulty
+  const category =
+    activeSession?.type === 'relation' && !activeSession?.isDaily
+      ? activeSession.sessionCategory || selectedCategory
+      : selectedCategory
   const dailyChallengeId = activeSession?.dailyChallengeId || null
   const dailyDateKey = activeSession?.dailyDateKey || null
   const dailyReward = activeSession?.dailyReward || 0
@@ -62,10 +93,10 @@ function RelationGamePage() {
   const dailyContentType = activeSession?.dailyContentType || null
   const dailySelectionDifficulty = activeSession?.dailySelectionDifficulty || null
   const dailySelectionCategory = activeSession?.dailySelectionCategory || null
-  const savedSessionChallengeIds = useMemo(
-    () => (activeSession?.type === 'relation' ? activeSession.sessionChallengeIds || [] : []),
-    [activeSession]
-  )
+  const savedSessionChallengeIds =
+    activeSession?.type === 'relation' ? activeSession.sessionChallengeIds || [] : []
+  const savedSessionChallenges =
+    activeSession?.type === 'relation' ? activeSession.sessionChallenges || [] : []
   const isDailyMode =
     activeSession?.isDaily === true &&
     activeSession?.type === 'relation' &&
@@ -77,36 +108,41 @@ function RelationGamePage() {
     [difficulty, category]
   )
   const [allChallenges, setAllChallenges] = useState(fallbackChallenges)
-  const [showHelpModal, setShowHelpModal] = useState(false)
-  const resolvedSessionChallengeIds = useMemo(() => {
-    if (isDailyMode || !allChallenges.length) {
+  const [sessionChallenges, setSessionChallenges] = useState(() => {
+    if (isDailyMode) {
       return []
     }
 
-    const validIds = savedSessionChallengeIds.filter((itemId) =>
-      allChallenges.some((item) => item.id === itemId)
-    )
-
-    if (validIds.length > 0) {
-      return validIds
+    if (savedSessionChallenges.length > 0) {
+      return savedSessionChallenges
     }
 
-    return shuffleItems(allChallenges)
-      .slice(0, Math.min(5, allChallenges.length))
-      .map((item) => item.id)
-  }, [allChallenges, isDailyMode, savedSessionChallengeIds])
+    const mappedSavedChallenges = savedSessionChallengeIds
+      .map((itemId) => fallbackChallenges.find((item) => item.id === itemId))
+      .filter(Boolean)
+
+    if (mappedSavedChallenges.length > 0) {
+      return mappedSavedChallenges
+    }
+
+    return pickRelationSessionChallenges({
+      challenges: fallbackChallenges,
+      difficulty,
+      category,
+      count: Math.min(5, fallbackChallenges.length),
+    })
+  })
+  const [showHelpModal, setShowHelpModal] = useState(false)
 
   const challenges = useMemo(() => {
     if (isDailyMode) {
       return [dailyContent].filter(Boolean)
     }
 
-    const selectedChallenges = resolvedSessionChallengeIds
-      .map((itemId) => allChallenges.find((item) => item.id === itemId))
-      .filter(Boolean)
-
-    return (selectedChallenges.length ? selectedChallenges : allChallenges.slice(0, 5)).filter(Boolean)
-  }, [allChallenges, dailyContent, isDailyMode, resolvedSessionChallengeIds])
+    return (sessionChallenges.length ? sessionChallenges : allChallenges.slice(0, 5)).filter(
+      Boolean
+    )
+  }, [allChallenges, dailyContent, isDailyMode, sessionChallenges])
 
   useEffect(() => {
     if (isDailyMode) return
@@ -117,14 +153,20 @@ function RelationGamePage() {
       try {
         const response = await getRelationContentRequest({ difficulty, category })
         if (!isMounted) return
-        setAllChallenges(
+        const nextChallenges =
           response.items?.length
             ? mergeRelationPools(response.items, fallbackChallenges)
             : fallbackChallenges
+        setAllChallenges(nextChallenges)
+        setSessionChallenges((prev) =>
+          prev.length ? remapRelationSessionChallengesToPool(prev, nextChallenges) : prev
         )
       } catch {
         if (!isMounted) return
         setAllChallenges(fallbackChallenges)
+        setSessionChallenges((prev) =>
+          prev.length ? remapRelationSessionChallengesToPool(prev, fallbackChallenges) : prev
+        )
       }
     }
 
@@ -150,6 +192,10 @@ function RelationGamePage() {
   const [answers, setAnswers] = useState(
     activeSession?.type === 'relation' ? activeSession.answers || [] : []
   )
+  const [roundFeedback, setRoundFeedback] = useState('')
+  const [wrongAttempts, setWrongAttempts] = useState(
+    activeSession?.type === 'relation' ? activeSession.wrongAttempts || 0 : 0
+  )
   const [showHint, setShowHint] = useState(
     activeSession?.type === 'relation' ? activeSession.showHint || false : false
   )
@@ -166,6 +212,7 @@ function RelationGamePage() {
   const hintAlreadyUsedForCurrentStep = hintUsedSteps.includes(index)
   const hintCount = hintUsedSteps.length
   const displayScore = Math.max(0, score - BASE_SCORE)
+  const canSubmit = Boolean(selectedRelation)
   const helpSections = [
     {
       title: 'Cilj igre',
@@ -212,6 +259,8 @@ function RelationGamePage() {
 
     saveActiveSession({
       type: 'relation',
+      sessionDifficulty: isDailyMode ? null : difficulty,
+      sessionCategory: isDailyMode ? null : category,
       index,
       selectedRelation,
       score,
@@ -230,11 +279,16 @@ function RelationGamePage() {
       dailyContentType: isDailyMode ? dailyContentType : null,
       dailySelectionDifficulty: isDailyMode ? dailySelectionDifficulty : null,
       dailySelectionCategory: isDailyMode ? dailySelectionCategory : null,
-      sessionChallengeIds: isDailyMode ? [] : resolvedSessionChallengeIds,
+      sessionChallengeIds: isDailyMode
+        ? []
+        : sessionChallenges.map((item) => item.id).filter(Boolean),
+      sessionChallenges: isDailyMode ? [] : sessionChallenges,
+      wrongAttempts,
     })
   }, [
     answers,
     challenges.length,
+    category,
     correct,
     dailyChallengeId,
     dailyContent,
@@ -248,11 +302,13 @@ function RelationGamePage() {
     hintUsedSteps,
     index,
     isDailyMode,
-    resolvedSessionChallengeIds,
+    difficulty,
+    sessionChallenges,
     score,
     selectedRelation,
     showHint,
     startedAt,
+    wrongAttempts,
     hasExpiredDailySession,
   ])
 
@@ -278,6 +334,7 @@ function RelationGamePage() {
         })
       : Math.max(0, score - WRONG_ANSWER_PENALTY)
     const updatedCorrect = isAccepted ? correct + 1 : correct
+    const updatedWrongAttempts = isAccepted ? wrongAttempts : wrongAttempts + 1
 
     const updatedAnswers = [
       ...answers,
@@ -294,6 +351,8 @@ function RelationGamePage() {
     setScore(updatedScore)
     setCorrect(updatedCorrect)
     setAnswers(updatedAnswers)
+    setRoundFeedback('')
+    setWrongAttempts(updatedWrongAttempts)
 
     if (index < challenges.length - 1) {
       setIndex((prev) => prev + 1)
@@ -336,6 +395,7 @@ function RelationGamePage() {
       category: currentChallenge.category,
       difficulty: currentChallenge.difficulty,
       hintCount,
+      wrongAttempts: updatedWrongAttempts,
       isDaily: isDailyMode,
       answers: updatedAnswers,
       username: currentUser?.username,
@@ -371,6 +431,7 @@ function RelationGamePage() {
       category: currentChallenge.category,
       difficulty: currentChallenge.difficulty,
       hintCount,
+      wrongAttempts: updatedWrongAttempts,
       isDaily: finalHistoryEntry.isDaily,
       dailyReward: finalHistoryEntry.dailyReward || 0,
       awardedPoints: finalHistoryEntry.awardedPoints || earnedPoints,
@@ -433,12 +494,19 @@ function RelationGamePage() {
                 key={option}
                 type="button"
                 className={selectedRelation === option ? 'active' : ''}
-                onClick={() => setSelectedRelation(option)}
+                onClick={() => {
+                  if (roundFeedback) {
+                    setRoundFeedback('')
+                  }
+                  setSelectedRelation(option)
+                }}
               >
                 {option}
               </button>
             ))}
           </div>
+
+          {roundFeedback ? <p className="error game-inline-feedback">{roundFeedback}</p> : null}
 
           {showHint && (
             <p className="muted small-text">
@@ -456,7 +524,12 @@ function RelationGamePage() {
               {hintAlreadyUsedForCurrentStep ? 'Pomoc iskoriscena' : 'Prikazi pomoc (-5)'}
             </button>
 
-            <button className="primary-btn" type="button" onClick={handleNext}>
+            <button
+              className="primary-btn"
+              type="button"
+              onClick={handleNext}
+              disabled={!canSubmit}
+            >
               {index === challenges.length - 1 ? 'Zavrsi rundu' : 'Potvrdi odgovor'}
             </button>
           </div>

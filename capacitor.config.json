@@ -1,0 +1,27 @@
+{
+  "appId": "com.wordassociationlab.mobile",
+  "appName": "Word Association Lab",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "hostname": "localhost",
+    "androidScheme": "http",
+    "allowNavigation": [
+      "192.168.1.109"
+    ]
+  },
+  "android": {
+    "allowMixedContent": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": false,
+      "backgroundColor": "#5d9cf6",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "LIGHT",
+      "backgroundColor": "#5d9cf6"
+    }
+  }
+}

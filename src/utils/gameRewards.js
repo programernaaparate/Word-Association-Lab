@@ -126,31 +126,42 @@ export const buildResultBadges = (result = {}) => {
   const accuracy = normalizeNumber(result.accuracy)
   const time = normalizeNumber(result.time)
   const hintCount = normalizeNumber(result.hintCount)
+  const wrongAttempts = normalizeNumber(result.wrongAttempts)
   const awardedPoints = normalizeNumber(
     result.awardedPoints ?? result.earnedPoints ?? 0
   )
+  const meaningfulAnswerCount = Array.isArray(result.answers)
+    ? result.answers.filter((item) => {
+        const answer = String(item?.answer || '').trim()
+        return answer && answer !== '(bez odgovora)'
+      }).length
+    : 0
   const difficulty = result.difficulty || 'Lako'
   const type = result.type || 'association'
   const perRoundTime = total > 0 ? time / total : time
   const badges = []
+  const completedAll = total > 0 && correct === total
+  const flawlessRun = completedAll && accuracy === 100 && wrongAttempts === 0
+  const hasAnyRealAttempt = meaningfulAnswerCount > 0 || wrongAttempts > 0 || correct > 0
+  const hasPositiveResult = correct > 0 || awardedPoints > 0
 
-  if (total > 0 && perRoundTime > 0 && perRoundTime <= 18) {
+  if (correct > 0 && perRoundTime > 0 && perRoundTime <= 18) {
     badges.push({ key: 'speed', label: 'Brzi mislilac', tone: 'sand' })
   }
 
-  if (total > 0 && accuracy === 100) {
+  if (flawlessRun) {
     badges.push({ key: 'perfect', label: 'Nepogresiv', tone: 'green' })
   }
 
-  if (total > 0 && hintCount === 0) {
+  if (correct > 0 && hintCount === 0) {
     badges.push({ key: 'clean', label: 'Bez pomoci', tone: 'blue' })
   }
 
-  if (difficulty === 'Tesko') {
+  if (difficulty === 'Tesko' && hasPositiveResult) {
     badges.push({ key: 'hard', label: 'Teski igrac', tone: 'violet' })
   }
 
-  if (result.isDaily) {
+  if (result.isDaily && normalizeNumber(result.dailyReward) > 0) {
     badges.push({ key: 'daily', label: 'Daily heroj', tone: 'teal' })
   }
 
@@ -158,7 +169,7 @@ export const buildResultBadges = (result = {}) => {
     badges.push({ key: 'xp', label: 'XP nalet', tone: 'gold' })
   }
 
-  if (normalizeNumber(result.performanceBonus) >= 20) {
+  if (normalizeNumber(result.performanceBonus) >= 20 && accuracy >= 75 && wrongAttempts <= 1) {
     badges.push({ key: 'performance', label: 'Top forma', tone: 'violet' })
   }
 
@@ -179,7 +190,11 @@ export const buildResultBadges = (result = {}) => {
   }
 
   if (!badges.length) {
-    badges.push({ key: 'starter', label: 'U zagrijavanju', tone: 'slate' })
+    badges.push({
+      key: 'starter',
+      label: hasAnyRealAttempt ? 'U zagrijavanju' : 'Probaj ponovo',
+      tone: 'slate',
+    })
   }
 
   return badges.slice(0, 6)

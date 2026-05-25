@@ -49,7 +49,7 @@ function LeaderboardPage() {
   return (
     <div className="screen">
       <div className="phone-card app-shell">
-        <Navbar title="Tabela lidera" showBack />
+        <Navbar title="Rang lista" showBack />
 
         <div className="page-content leaderboard-page">
           <div className="leaderboard-card">

@@ -8,6 +8,7 @@ import historyRoutes from './routes/history.js'
 import adminRoutes from './routes/admin.js'
 import messageRoutes from './routes/messages.js'
 import submissionsRoutes from './routes/submissions.js'
+import aiRoutes from './routes/ai.js'
 import { getPool } from './config/db.js'
 import { assertRequiredServerEnv } from './utils/env.js'
 import { runMigrations } from './utils/migrations.js'
@@ -15,6 +16,23 @@ import { runMigrations } from './utils/migrations.js'
 const app = express()
 const port = Number(process.env.PORT || 4000)
 const allowedOrigins = new Set([process.env.CLIENT_URL || 'http://localhost:5173'])
+const allowedNativeOrigins = new Set([
+  'http://localhost',
+  'https://localhost',
+  'http://127.0.0.1',
+  'https://127.0.0.1',
+  'capacitor://localhost',
+  'ionic://localhost',
+])
+
+const isPrivateLanHost = (hostname) => {
+  return (
+    /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname)
+  )
+}
+
 const isLocalFrontendOrigin = (origin) => {
   if (!origin) {
     return true
@@ -24,12 +42,19 @@ const isLocalFrontendOrigin = (origin) => {
     return true
   }
 
+  if (allowedNativeOrigins.has(origin)) {
+    return true
+  }
+
   try {
     const parsedOrigin = new URL(origin)
     const isLocalHost =
       parsedOrigin.hostname === 'localhost' || parsedOrigin.hostname === '127.0.0.1'
 
-    return parsedOrigin.protocol === 'http:' && isLocalHost
+    const isSafeProtocol =
+      parsedOrigin.protocol === 'http:' || parsedOrigin.protocol === 'https:'
+
+    return isSafeProtocol && (isLocalHost || isPrivateLanHost(parsedOrigin.hostname))
   } catch {
     return false
   }
@@ -70,6 +95,7 @@ app.use('/api/history', historyRoutes)
 app.use('/api/submissions', submissionsRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/messages', messageRoutes)
+app.use('/api/ai', aiRoutes)
 
 app.use((error, _req, res, _next) => {
   console.error(error)
@@ -80,7 +106,7 @@ const startServer = async () => {
   assertRequiredServerEnv()
   await runMigrations()
 
-  app.listen(port, () => {
+  app.listen(port, '0.0.0.0', () => {
     console.log(`Server radi na http://localhost:${port}`)
   })
 }

@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import bcrypt from 'bcryptjs'
 import { getPool, query } from '../config/db.js'
 import { requireAdmin, requireAuth } from '../middleware/auth.js'
 import {
@@ -14,6 +15,18 @@ router.use(requireAuth, requireAdmin)
 
 const RELATION_OPTIONS = new Set(['Sinonim', 'Antonim', 'Asocijacija'])
 const LOGIC_MODES = new Set(['concept', 'odd-one-out'])
+
+const validatePassword = (password = '') => {
+  if (password.length < 4) {
+    return 'Lozinka mora imati najmanje 4 karaktera.'
+  }
+
+  if (!/[A-Z]/.test(password)) {
+    return 'Lozinka mora imati bar jedno veliko slovo.'
+  }
+
+  return ''
+}
 
 const parseList = (value) =>
   (Array.isArray(value) ? value : [])
@@ -48,6 +61,7 @@ const mapAdminUser = (item) => ({
 const buildContentPayload = (type, payload = {}) => {
   if (type === 'association') {
     const word = String(payload.word || '').trim()
+    const symbol = String(payload.symbol || '').trim()
     const clues = parseList(payload.clues)
     const acceptedAnswers = parseList(payload.acceptedAnswers)
 
@@ -58,6 +72,7 @@ const buildContentPayload = (type, payload = {}) => {
     return {
       values: {
         word,
+        symbol: symbol || null,
         category: String(payload.category || 'Priroda').trim() || 'Priroda',
         difficulty: String(payload.difficulty || 'Lako').trim() || 'Lako',
         clues,
@@ -178,6 +193,91 @@ router.get('/users', async (req, res) => {
   return res.json({ items: rows.map(mapAdminUser) })
 })
 
+router.patch('/users/:id', async (req, res) => {
+  const targetUserId = Number(req.params.id || 0)
+  const cleanUsername = String(req.body?.username || '').trim()
+  const nextPassword = String(req.body?.password || '')
+
+  if (!targetUserId) {
+    return res.status(400).json({ message: 'Korisnik nije validan.' })
+  }
+
+  if (!cleanUsername) {
+    return res.status(400).json({ message: 'Korisnicko ime je obavezno.' })
+  }
+
+  if (cleanUsername.toLowerCase() === 'admin') {
+    return res.status(403).json({
+      message: 'Korisnicko ime "admin" je rezervisano za sistemski admin nalog.',
+    })
+  }
+
+  if (nextPassword) {
+    const passwordValidationMessage = validatePassword(nextPassword)
+    if (passwordValidationMessage) {
+      return res.status(400).json({ message: passwordValidationMessage })
+    }
+  }
+
+  const users = await query(
+    'SELECT id, username, role, points, level, created_at FROM users WHERE id = ? LIMIT 1',
+    [targetUserId]
+  )
+  const targetUser = users[0]
+
+  if (!targetUser) {
+    return res.status(404).json({ message: 'Korisnik nije pronadjen.' })
+  }
+
+  if (targetUser.role === 'admin') {
+    return res.status(403).json({ message: 'Admin nalog se ne menja iz ovog panela.' })
+  }
+
+  const existingUsers = await query(
+    'SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id <> ? LIMIT 1',
+    [cleanUsername, targetUserId]
+  )
+
+  if (existingUsers.length > 0) {
+    return res.status(409).json({ message: 'Korisnicko ime vec postoji.' })
+  }
+
+  if (nextPassword) {
+    const passwordHash = await bcrypt.hash(nextPassword, 10)
+    await query(
+      'UPDATE users SET username = ?, password_hash = ? WHERE id = ?',
+      [cleanUsername, passwordHash, targetUserId]
+    )
+  } else {
+    await query('UPDATE users SET username = ? WHERE id = ?', [cleanUsername, targetUserId])
+  }
+
+  const [updatedUser] = await query(
+    `SELECT
+        u.id,
+        u.username,
+        u.role,
+        u.points,
+        u.level,
+        u.created_at,
+        0 AS total_games,
+        0 AS completed_daily,
+        NULL AS last_played_at,
+        0 AS unread_count
+     FROM users u
+     WHERE u.id = ?
+     LIMIT 1`,
+    [targetUserId]
+  )
+
+  return res.json({
+    message: nextPassword
+      ? `Azurirani su korisnicko ime i lozinka za korisnika ${cleanUsername}.`
+      : `Azurirano je korisnicko ime za korisnika ${cleanUsername}.`,
+    user: updatedUser ? mapAdminUser(updatedUser) : null,
+  })
+})
+
 router.post('/users/:id/reset-progress', async (req, res) => {
   const targetUserId = Number(req.params.id || 0)
 
@@ -253,10 +353,11 @@ router.post('/content/:type', async (req, res) => {
   if (type === 'association') {
     result = await query(
       `INSERT INTO association_words
-        (word, category, difficulty, clues_json, hint, accepted_answers_json)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+        (word, symbol, category, difficulty, clues_json, hint, accepted_answers_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         values.word,
+        values.symbol,
         values.category,
         values.difficulty,
         JSON.stringify(values.clues),
@@ -309,10 +410,11 @@ router.put('/content/:type/:id', async (req, res) => {
   if (type === 'association') {
     await query(
       `UPDATE association_words
-       SET word = ?, category = ?, difficulty = ?, clues_json = ?, hint = ?, accepted_answers_json = ?
+       SET word = ?, symbol = ?, category = ?, difficulty = ?, clues_json = ?, hint = ?, accepted_answers_json = ?
        WHERE id = ?`,
       [
         values.word,
+        values.symbol,
         values.category,
         values.difficulty,
         JSON.stringify(values.clues),

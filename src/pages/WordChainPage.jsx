@@ -2,14 +2,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import GameHelpModal from '../components/GameHelpModal'
 import Navbar from '../components/Navbar'
+import { evaluateAiWordChainNodeRequest } from '../utils/api'
 import { syncCompletedGame } from '../utils/gameSync'
 import {
   calculatePerformanceBonus,
   calculateWordChainReward,
 } from '../utils/gameRewards'
+import { evaluateSmartWordChainCandidate } from '../utils/localSmartMatching'
 import {
   clearActiveSession,
   getActiveSession,
+  getAuthToken,
   getCategory,
   getCurrentUser,
   getDifficulty,
@@ -185,8 +188,15 @@ const evaluateChain = (nodes, centerWord, difficulty, allowedNodes) => {
     const normalizedNodeWord = normalizeWord(node.word)
     const isDuplicate = seenWords.has(normalizedNodeWord)
     const isCenterWord = normalizedNodeWord === normalizedCenter
+    const localSmartMatch = evaluateSmartWordChainCandidate({
+      candidateWord: node.word,
+      allowedWords: allowedNodes[node.relation] || [],
+    })
     const isKnownRelation =
-      Boolean(normalizedNodeWord) && allowedNodeIndex[node.relation]?.has(normalizedNodeWord)
+      Boolean(normalizedNodeWord) &&
+      (allowedNodeIndex[node.relation]?.has(normalizedNodeWord) ||
+        Boolean(localSmartMatch.accepted) ||
+        Boolean(node.aiValidated))
     const accepted =
       Boolean(normalizedNodeWord) && !isDuplicate && !isCenterWord && Boolean(isKnownRelation)
 
@@ -201,10 +211,14 @@ const evaluateChain = (nodes, centerWord, difficulty, allowedNodes) => {
       reason: isCenterWord
         ? 'Ista rijec kao centralni pojam.'
         : isDuplicate
-          ? 'Duplirana rijec.'
-          : !isKnownRelation
-            ? `Nije prepoznata kao dobra ${node.relation.toLowerCase()} veza za centralni pojam.`
-            : 'Validan cvor.',
+            ? 'Duplirana rijec.'
+            : !isKnownRelation
+              ? `Nije prepoznata kao dobra ${node.relation.toLowerCase()} veza za centralni pojam.`
+              : node.aiValidated
+                ? node.aiReason || 'AI je potvrdio da ova veza ima smisla.'
+                : localSmartMatch.accepted
+                  ? localSmartMatch.reason
+                  : 'Validan cvor.',
     }
   })
 
@@ -250,10 +264,18 @@ const evaluateChain = (nodes, centerWord, difficulty, allowedNodes) => {
 
 function WordChainPage() {
   const navigate = useNavigate()
+  const token = getAuthToken()
+  const aiEvaluationEnabled = import.meta.env.VITE_ENABLE_AI_EVALUATION === 'true'
   const activeSession = getActiveSession()
   const isSavedWordChainSession = activeSession?.type === 'word-chain'
-  const difficulty = getDifficulty()
-  const category = getCategory()
+  const selectedDifficulty = getDifficulty()
+  const selectedCategory = getCategory()
+  const difficulty = isSavedWordChainSession
+    ? activeSession.sessionDifficulty || activeSession.difficulty || selectedDifficulty
+    : selectedDifficulty
+  const category = isSavedWordChainSession
+    ? activeSession.sessionCategory || activeSession.category || selectedCategory
+    : selectedCategory
   const chainPreset = getWordChainPreset(difficulty, category)
   const presetKey = category === 'Sve' ? `Priroda-${difficulty}` : `${category}-${difficulty}`
   const allowedNodes = CHAIN_ALLOWED_NODES[presetKey] || CHAIN_ALLOWED_NODES['Priroda-Srednje']
@@ -284,15 +306,8 @@ function WordChainPage() {
     () => evaluateChain(nodes, centerWord, difficulty, allowedNodes),
     [allowedNodes, centerWord, difficulty, nodes]
   )
+  const canFinishChain = chainEvaluation.hasMinimumNodes && chainEvaluation.hasAllRelations
 
-  const relationExamples = useMemo(
-    () =>
-      RELATION_OPTIONS.map((item) => ({
-        relation: item,
-        examples: (allowedNodes[item] || []).slice(0, 3),
-      })),
-    [allowedNodes]
-  )
   const helpSections = [
     {
       title: 'Cilj igre',
@@ -323,13 +338,13 @@ function WordChainPage() {
       nodes,
       newWord,
       relation,
-      category,
-      difficulty,
+      sessionCategory: category,
+      sessionDifficulty: difficulty,
       startedAt,
     })
   }, [category, centerWord, difficulty, newWord, nodes, relation, startedAt])
 
-  const handleAddNode = () => {
+  const handleAddNode = async () => {
     const trimmedWord = newWord.trim()
     const normalizedWord = normalizeWord(trimmedWord)
 
@@ -348,17 +363,61 @@ function WordChainPage() {
       return
     }
 
-    if (!buildAllowedNodeIndex(allowedNodes)[relation]?.has(normalizedWord)) {
-      setChainMessage(
-        `Ta rijec nije prepoznata kao dobra ${relation.toLowerCase()} veza za "${centerWord}".`
-      )
-      return
+    let aiValidated = false
+    let aiReason = ''
+    const localSmartMatch = evaluateSmartWordChainCandidate({
+      candidateWord: trimmedWord,
+      allowedWords: allowedNodes[relation] || [],
+    })
+
+    if (
+      !buildAllowedNodeIndex(allowedNodes)[relation]?.has(normalizedWord) &&
+      !localSmartMatch.accepted
+    ) {
+      if (token && aiEvaluationEnabled) {
+        try {
+          const aiEvaluation = await evaluateAiWordChainNodeRequest(token, {
+            centerWord,
+            candidateWord: trimmedWord,
+            relation,
+            category,
+            difficulty,
+            relationExamples: allowedNodes[relation] || [],
+          })
+
+          if (aiEvaluation.available && aiEvaluation.accepted) {
+            aiValidated = true
+            aiReason = aiEvaluation.reason || 'AI je potvrdio da ova veza ima smisla.'
+          } else {
+            setChainMessage(
+              aiEvaluation.reason ||
+                localSmartMatch.reason ||
+                `Ta rijec nije prepoznata kao dobra ${relation.toLowerCase()} veza za "${centerWord}".`
+            )
+            return
+          }
+        } catch {
+          setChainMessage(
+            localSmartMatch.reason ||
+              `Ta rijec nije prepoznata kao dobra ${relation.toLowerCase()} veza za "${centerWord}".`
+          )
+          return
+        }
+      } else {
+        setChainMessage(
+          localSmartMatch.reason ||
+            `Ta rijec nije prepoznata kao dobra ${relation.toLowerCase()} veza za "${centerWord}".`
+        )
+        return
+      }
     }
 
     const newNode = {
       id: `${Date.now()}-${trimmedWord}`,
       word: trimmedWord,
       relation,
+      aiValidated,
+      aiReason,
     }
 
     setNodes((prev) => [...prev, newNode])
@@ -369,6 +428,7 @@ function WordChainPage() {
 
   const handleRemoveNode = (id) => {
     setNodes((prev) => prev.filter((item) => item.id !== id))
+    setChainMessage('')
   }
 
   const handleClearChain = () => {
@@ -379,6 +439,11 @@ function WordChainPage() {
   const handleFinish = async () => {
     if (!nodes.length) {
       setChainMessage('Dodaj makar jednu rijec prije zavrsetka lanca.')
+      return
+    }
+
+    if (!canFinishChain) {
+      setChainMessage(`Lanac jos nije spreman: ${chainEvaluation.missingGoals.join(' ')}`)
       return
     }
 
@@ -507,11 +572,15 @@ function WordChainPage() {
                 pojmove, najmanje 4 cvora i bar po jedan sinonim, antonim i asocijaciju.
               </p>
               <div className="profile-info-box">
-                {relationExamples.map((item) => (
-                  <p key={item.relation}>
-                    <strong>{item.relation}:</strong> {item.examples.join(', ')}
-                  </p>
-                ))}
+                <p>
+                  <strong>Sinonim:</strong> unesi rijec koja je po znacenju bliska centru.
+                </p>
+                <p>
+                  <strong>Antonim:</strong> unesi rijec koja ide kao suprotnost centru.
+                </p>
+                <p>
+                  <strong>Asocijacija:</strong> unesi pojam koji se logicno veze za centar.
+                </p>
               </div>
               {chainEvaluation.missingGoals.length > 0 ? (
                 <ul className="chain-goal-list">

@@ -2,13 +2,39 @@ import { getPool } from '../config/db.js'
 
 export const runMigrations = async () => {
   const pool = getPool()
+  const associationSymbolBackfill = [
+    ['Sunce', '☀️'],
+    ['More', '🌊'],
+    ['Galaksija', '🌌'],
+    ['Atom', '⚛️'],
+    ['Fudbal', '⚽'],
+    ['Maraton', '🏃'],
+    ['Kamera', '🎬'],
+    ['Robot', '🤖'],
+  ]
   const [userResetColumns] = await pool.query(
     "SHOW COLUMNS FROM users LIKE 'progress_reset_at'"
+  )
+  const [associationSymbolColumns] = await pool.query(
+    "SHOW COLUMNS FROM association_words LIKE 'symbol'"
   )
 
   if (!userResetColumns.length) {
     await pool.query(
       'ALTER TABLE users ADD COLUMN progress_reset_at TIMESTAMP NULL DEFAULT NULL'
+    )
+  }
+
+  if (!associationSymbolColumns.length) {
+    await pool.query(
+      'ALTER TABLE association_words ADD COLUMN symbol VARCHAR(24) NULL AFTER word'
+    )
+  }
+
+  for (const [word, symbol] of associationSymbolBackfill) {
+    await pool.query(
+      'UPDATE association_words SET symbol = ? WHERE LOWER(word) = LOWER(?) AND (symbol IS NULL OR symbol = \'\')',
+      [symbol, word]
     )
   }
 

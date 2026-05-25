@@ -27,9 +27,11 @@ const createAssociation = (
   difficulty,
   clues,
   hint,
-  acceptedAnswers = []
+  acceptedAnswers = [],
+  symbol = ''
 ) => ({
   word,
+  symbol,
   category,
   difficulty,
   clues,
@@ -117,6 +119,27 @@ const extraAssociations = [
   createAssociation('Topografija', 'Geografija', 'Tesko', ['Reljef', 'Visina', 'Teren', 'Mapa'], 'Opisivanje i prikazivanje oblika terena.'),
   createAssociation('Kartografija', 'Geografija', 'Tesko', ['Mapa', 'Projekcija', 'Skala', 'Crtanje'], 'Nauka i vjestina izrade karata.'),
   createAssociation('Geopolitika', 'Geografija', 'Tesko', ['Drzave', 'Moc', 'Prostor', 'Uticaj'], 'Proucavanje odnosa politike i geografskog prostora.'),
+]
+
+const extraAssociationsLocal = [
+  createAssociation('Ćelija', 'Nauka', 'Lako', ['Membrana', 'Jezgro', 'Tkivo', 'Organizam'], 'Osnovna jedinica živih bića.', ['ćelija', 'celija'], '🧫'),
+  createAssociation('Kiseonik', 'Nauka', 'Srednje', ['Disanje', 'Gas', 'Vazduh', 'Element'], 'Hemijski element neophodan za disanje.', ['kiseonik'], '🫧'),
+  createAssociation('Rukomet', 'Sport', 'Lako', ['Gol', 'Dvorana', 'Sedmerac', 'Lopta'], 'Ekipni sport u kojem se lopta baca rukom.', ['rukomet'], '🤾'),
+  createAssociation('Štafeta', 'Sport', 'Srednje', ['Tim', 'Palica', 'Predaja', 'Trka'], 'Trka u kojoj članovi tima predaju palicu.', ['štafeta', 'stafeta'], '🏁'),
+  createAssociation('Žanr', 'Film', 'Lako', ['Drama', 'Komedija', 'Horor', 'Vrsta'], 'Vrsta filma ili književnog djela.', ['žanr', 'zanr'], '🎞️'),
+  createAssociation('Režija', 'Film', 'Tesko', ['Vizija', 'Set', 'Kamera', 'Reditelj'], 'Vođenje i oblikovanje filmskog djela.', ['režija', 'rezija'], '🎥'),
+  createAssociation('Ćirilica', 'Istorija', 'Srednje', ['Slova', 'Pismo', 'Azbuka', 'Vuk'], 'Jedno od osnovnih slovenskih pisama.', ['ćirilica', 'cirilica'], '🔤'),
+  createAssociation('Pećina', 'Priroda', 'Lako', ['Stijena', 'Mrak', 'Podzemlje', 'Kapljice'], 'Prirodna šupljina u stijeni.', ['pećina', 'pecina'], '🪨'),
+  createAssociation('Šuma', 'Priroda', 'Srednje', ['Drveće', 'Lišće', 'Staza', 'Životinje'], 'Veliko područje obraslo drvećem.', ['šuma', 'suma'], '🌲'),
+  createAssociation('Pozorište', 'Umjetnost', 'Lako', ['Scena', 'Glumci', 'Publika', 'Predstava'], 'Mjesto i umjetnost izvođenja predstava.', ['pozorište', 'pozoriste'], '🎭'),
+  createAssociation('Računar', 'Tehnologija', 'Lako', ['Tastatura', 'Ekran', 'Procesor', 'Miš'], 'Elektronski uređaj za obradu podataka.', ['računar', 'racunar', 'kompjuter'], '💻'),
+  createAssociation('Mreža', 'Tehnologija', 'Srednje', ['Internet', 'Signal', 'Povezivanje', 'Server'], 'Sistem povezanih uređaja i veza.', ['mreža', 'mreza'], '🕸️'),
+  createAssociation('Ušće', 'Geografija', 'Srednje', ['Rijeka', 'More', 'Ulivanje', 'Delta'], 'Mjesto gdje se rijeka uliva u veću vodenu površinu.', ['ušće', 'usce'], '🌊'),
+  createAssociation('Poluostrvo', 'Geografija', 'Tesko', ['Kopno', 'More', 'Rt', 'Obala'], 'Kopno okruženo morem sa tri strane.', ['poluostrvo'], '🗺️'),
+  createAssociation('Čempres', 'Priroda', 'Lako', ['Drvo', 'Vitko', 'Mediteran', 'Četinari'], 'Visoko i usko drvo tamnozelenih grana.', ['čempres', 'cempres'], '🌳'),
+  createAssociation('Lozinka', 'Tehnologija', 'Lako', ['Prijava', 'Sigurnost', 'Šifra', 'Nalog'], 'Tajni niz znakova za pristup sistemu.', ['lozinka', 'šifra', 'sifra'], '🔐'),
+  createAssociation('Čitač', 'Tehnologija', 'Srednje', ['Kartica', 'Senzor', 'Ulaz', 'Uređaj'], 'Uređaj koji prepoznaje i očitava podatke.', ['čitač', 'citac'], '📟'),
+  createAssociation('Žubor', 'Priroda', 'Tesko', ['Voda', 'Potok', 'Zvuk', 'Tok'], 'Blag i neprekidan zvuk tekuće vode.', ['žubor', 'zubor'], '💧'),
 ]
 
 const manualRelations = [
@@ -293,6 +316,7 @@ const demoHistory = [
 
 const mapAssociation = (item) => ({
   word: item.word,
+  symbol: item.symbol || '',
   category: item.category,
   difficulty: item.difficulty,
   clues: item.clues,
@@ -334,7 +358,11 @@ const dedupeBy = (items, keyBuilder) => {
 }
 
 const allAssociations = dedupeBy(
-  [...DEFAULT_ASSOCIATION_WORDS.map(mapAssociation), ...extraAssociations],
+  [
+    ...DEFAULT_ASSOCIATION_WORDS.map(mapAssociation),
+    ...extraAssociations,
+    ...extraAssociationsLocal,
+  ],
   (item) => lower(item.word)
 )
 
@@ -393,13 +421,13 @@ const allRelations = dedupeBy(
 )
 
 const buildAssociationInsert = (rows) => `
-INSERT INTO association_words (word, category, difficulty, clues_json, hint, accepted_answers_json)
-SELECT seed.word, seed.category, seed.difficulty, seed.clues_json, seed.hint, seed.accepted_answers_json
+INSERT INTO association_words (word, symbol, category, difficulty, clues_json, hint, accepted_answers_json)
+SELECT seed.word, seed.symbol, seed.category, seed.difficulty, seed.clues_json, seed.hint, seed.accepted_answers_json
 FROM (
 ${rows
   .map(
     (row, index) =>
-      `  ${index === 0 ? 'SELECT' : 'UNION ALL SELECT'} ${sqlString(row.word)} AS word, ${sqlString(row.category)} AS category, ${sqlString(row.difficulty)} AS difficulty, ${sqlJson(row.clues)} AS clues_json, ${sqlString(row.hint)} AS hint, ${sqlJson(row.acceptedAnswers)} AS accepted_answers_json`
+      `  ${index === 0 ? 'SELECT' : 'UNION ALL SELECT'} ${sqlString(row.word)} AS word, ${sqlString(row.symbol || '')} AS symbol, ${sqlString(row.category)} AS category, ${sqlString(row.difficulty)} AS difficulty, ${sqlJson(row.clues)} AS clues_json, ${sqlString(row.hint)} AS hint, ${sqlJson(row.acceptedAnswers)} AS accepted_answers_json`
   )
   .join('\n')}
 ) AS seed

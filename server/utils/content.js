@@ -8,11 +8,12 @@ const CONTENT_CONFIG = {
   association: {
     table: 'association_words',
     select:
-      'id, word, category, difficulty, clues_json, hint, accepted_answers_json',
+      'id, word, symbol, category, difficulty, clues_json, hint, accepted_answers_json',
     orderBy: 'id ASC',
     mapRow: (item) => ({
       id: item.id,
       word: item.word,
+      symbol: item.symbol,
       category: item.category,
       difficulty: item.difficulty,
       clues: parseJsonArray(item.clues_json),
@@ -103,14 +104,16 @@ const buildFilter = ({ difficulty, category, mode } = {}) => {
 
 const buildDailyTitle = (type, content) => {
   if (type === 'logic') {
-    return `Dnevni izazov: ${content.answer}`
+    return content.mode === 'odd-one-out'
+      ? 'Dnevni izazov: Ne pripada'
+      : 'Dnevni izazov: Zajednicki pojam'
   }
 
   if (type === 'relation') {
-    return `Dnevna relacija: ${content.leftWord}`
+    return 'Dnevna relacija'
   }
 
-  return `Dnevna rijec: ${content.word}`
+  return content.symbol ? 'Dnevni simbol' : 'Dnevna asocijacija'
 }
 
 const buildDailyDescription = (type, content) => {
@@ -122,7 +125,9 @@ const buildDailyDescription = (type, content) => {
     return `Odredi odnos izmedju ${content.leftWord} i ${content.rightWord}.`
   }
 
-  return `Pronadji najbolju asocijaciju za pojam ${content.word}.`
+  return content.symbol
+    ? `Povezi simbol ${content.symbol} sa pravim pojmom i osvoji bonus.`
+    : 'Povezi otvorene tragove i pogodi konacno rjesenje za bonus.'
 }
 
 export const getDateKey = (date = new Date()) => {

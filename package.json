@@ -10,9 +10,18 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "seed:mega": "node server/sql/generate_mega_seed.mjs"
+    "seed:mega": "node server/sql/generate_mega_seed.mjs",
+    "mobile:sync": "npm run build && npx cap sync android",
+    "mobile:android": "npm run build && npx cap sync android && npx cap open android",
+    "mobile:apk": "powershell -ExecutionPolicy Bypass -File .\\scripts\\build-android-apk.ps1"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.1",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/cli": "^8.3.1",
+    "@capacitor/core": "^8.3.1",
+    "@capacitor/splash-screen": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.2",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.1",

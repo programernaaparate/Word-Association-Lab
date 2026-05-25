@@ -1,4 +1,56 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api'
+import { Capacitor } from '@capacitor/core'
+
+const LAST_SUCCESSFUL_API_BASE_KEY = 'lastSuccessfulApiBaseUrl'
+
+const isNativeAndroid = () =>
+  Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
+
+const normalizeApiBaseUrl = (url) => String(url || '').trim().replace(/\/+$/, '')
+
+const canUseLocalStorage = () => typeof window !== 'undefined' && Boolean(window.localStorage)
+
+const getStoredApiBaseUrl = () => {
+  if (!canUseLocalStorage()) {
+    return ''
+  }
+
+  return normalizeApiBaseUrl(window.localStorage.getItem(LAST_SUCCESSFUL_API_BASE_KEY))
+}
+
+const saveStoredApiBaseUrl = (url) => {
+  if (!canUseLocalStorage()) {
+    return
+  }
+
+  window.localStorage.setItem(LAST_SUCCESSFUL_API_BASE_KEY, normalizeApiBaseUrl(url))
+}
+
+const getBrowserHostApiUrl = () => {
+  if (typeof window === 'undefined') {
+    return ''
+  }
+
+  const hostName = window.location.hostname
+
+  if (!hostName) {
+    return ''
+  }
+
+  return `http://${hostName}:4000/api`
+}
+
+const getCandidateApiBaseUrls = () => {
+  const configuredApiUrl = normalizeApiBaseUrl(import.meta.env.VITE_API_URL)
+  const storedApiUrl = getStoredApiBaseUrl()
+  const browserHostApiUrl = normalizeApiBaseUrl(getBrowserHostApiUrl())
+  const defaults = isNativeAndroid()
+    ? ['http://10.0.2.2:4000/api']
+    : ['http://localhost:4000/api', 'http://127.0.0.1:4000/api']
+
+  return [...new Set([configuredApiUrl, storedApiUrl, browserHostApiUrl, ...defaults].filter(Boolean))]
+}
+
+const getPrimaryApiBaseUrl = () => getCandidateApiBaseUrls()[0] || 'http://localhost:4000/api'
 
 const parseResponse = async (response) => {
   const data = await response.json().catch(() => ({}))
@@ -10,9 +62,22 @@ const parseResponse = async (response) => {
   return data
 }
 
-export const apiRequest = async (path, options = {}) => {
+const isNetworkError = (error) => {
+  const message = String(error?.message || '').toLowerCase()
+
+  return (
+    error instanceof TypeError ||
+    message.includes('failed to fetch') ||
+    message.includes('networkerror') ||
+    message.includes('network request failed') ||
+    message.includes('load failed')
+  )
+}
+
+const requestWithBaseUrl = async (baseUrl, path, options = {}) => {
   const { headers: requestHeaders = {}, ...restOptions } = options
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+
+  const response = await fetch(`${baseUrl}${path}`, {
     ...restOptions,
     headers: {
       'Content-Type': 'application/json',
@@ -20,7 +85,34 @@ export const apiRequest = async (path, options = {}) => {
     },
   })
 
-  return parseResponse(response)
+  const data = await parseResponse(response)
+  saveStoredApiBaseUrl(baseUrl)
+  return data
+}
+
+const buildNetworkErrorMessage = () => {
+  const primaryApiBaseUrl = getPrimaryApiBaseUrl()
+
+  return `Ne mogu da se povezem sa serverom (${primaryApiBaseUrl}). Proveri da li backend radi, da li su telefon i racunar na istoj mrezi i da li je instaliran najnoviji APK.`
+}
+
+export const apiRequest = async (path, options = {}) => {
+  const candidateApiBaseUrls = getCandidateApiBaseUrls()
+  let lastError = null
+
+  for (const baseUrl of candidateApiBaseUrls) {
+    try {
+      return await requestWithBaseUrl(baseUrl, path, options)
+    } catch (error) {
+      if (!isNetworkError(error)) {
+        throw error
+      }
+
+      lastError = error
+    }
+  }
+
+  throw new Error(lastError ? buildNetworkErrorMessage() : 'Server trenutno nije dostupan.')
 }
 
 const withAuth = (token) => ({
@@ -124,6 +216,15 @@ export const getAdminUsersRequest = (token) =>
     },
   })
 
+export const updateAdminUserRequest = (token, userId, payload) =>
+  apiRequest(`/admin/users/${userId}`, {
+    method: 'PATCH',
+    headers: {
+      ...withAuth(token),
+    },
+    body: JSON.stringify(payload),
+  })
+
 export const resetAdminUserProgressRequest = (token, userId) =>
   apiRequest(`/admin/users/${userId}/reset-progress`, {
     method: 'POST',
@@ -221,6 +322,24 @@ export const getMessageThreadRequest = (token, otherUserId) =>
 
 export const sendMessageRequest = (token, otherUserId, payload) =>
   apiRequest(`/messages/thread/${otherUserId}`, {
+    method: 'POST',
+    headers: {
+      ...withAuth(token),
+    },
+    body: JSON.stringify(payload),
+  })
+
+export const evaluateAiConceptAnswerRequest = (token, payload) =>
+  apiRequest('/ai/concept-answer', {
+    method: 'POST',
+    headers: {
+      ...withAuth(token),
+    },
+    body: JSON.stringify(payload),
+  })
+
+export const evaluateAiWordChainNodeRequest = (token, payload) =>
+  apiRequest('/ai/word-chain-node', {
     method: 'POST',
     headers: {
       ...withAuth(token),

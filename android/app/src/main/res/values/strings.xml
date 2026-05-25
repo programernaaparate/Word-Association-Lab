@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Word Association Lab</string>
+    <string name="title_activity_main">Word Association Lab</string>
+    <string name="package_name">com.wordassociationlab.mobile</string>
+    <string name="custom_url_scheme">com.wordassociationlab.mobile</string>
+</resources>

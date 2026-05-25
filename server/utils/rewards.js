@@ -322,7 +322,9 @@ const calculateLogicMetrics = ({
   const safeAnswers = getSafeAnswers(safeType, answers)
   const total = safeAnswers.length
   const correct = safeAnswers.filter((item) => Boolean(item.accepted)).length
-  const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0
+  const partialCount = safeAnswers.filter((item) => Boolean(item.partialAccepted)).length
+  const weightedCorrect = correct + partialCount * 0.5
+  const accuracy = total > 0 ? Math.round((weightedCorrect / total) * 100) : 0
   const roundDelta = safeAnswers.reduce((sum, item) => {
     if (item.accepted) {
       return (
@@ -338,6 +340,25 @@ const calculateLogicMetrics = ({
       )
     }
 
+    if (item.partialAccepted) {
+      return (
+        sum +
+        Math.max(
+          1,
+          Math.round(
+            calculateLogicReward({
+              difficulty: getRoundDifficulty(item, difficulty),
+              mode:
+                item.mode === 'odd-one-out' || safeType === 'logic-odd-one-out'
+                  ? 'odd-one-out'
+                  : 'concept',
+              hintUsed: Boolean(item.hintUsed),
+            }) * 0.5
+          )
+        )
+      )
+    }
+
     if (hasSubmittedAnswer(item.answer)) {
       return sum - LOGIC_WRONG_PENALTY
     }
@@ -347,7 +368,7 @@ const calculateLogicMetrics = ({
   const performanceBonus = calculatePerformanceBonus({
     difficulty: getPerformanceDifficulty(safeAnswers, difficulty),
     total,
-    correct,
+    correct: weightedCorrect,
     time,
     hintCount,
     type: safeType,

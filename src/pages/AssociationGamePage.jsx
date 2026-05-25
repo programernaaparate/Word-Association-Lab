@@ -15,6 +15,7 @@ import {
   getCategory,
   getCurrentUser,
   getDifficulty,
+  getRotatedSessionItemIds,
   isExpiredDailySession,
   saveActiveSession,
   saveLastResult,
@@ -28,32 +29,51 @@ const WRONG_ANSWER_PENALTY = 15
 const mergeWordPools = (primaryItems = [], fallbackItems = []) => {
   const itemMap = new Map()
 
-  ;[...primaryItems, ...fallbackItems].forEach((item) => {
+  fallbackItems.forEach((item) => {
     const itemKey = `${item.word}-${item.category}-${item.difficulty}`
-    if (!itemMap.has(itemKey)) {
-      itemMap.set(itemKey, item)
-    }
+    itemMap.set(itemKey, item)
+  })
+
+  primaryItems.forEach((item) => {
+    const itemKey = `${item.word}-${item.category}-${item.difficulty}`
+    const previousItem = itemMap.get(itemKey) || {}
+    itemMap.set(itemKey, {
+      ...previousItem,
+      ...item,
+      symbol: item.symbol || previousItem.symbol || '',
+      acceptedAnswers:
+        item.acceptedAnswers?.length ? item.acceptedAnswers : previousItem.acceptedAnswers || [],
+    })
   })
 
   return Array.from(itemMap.values())
 }
 
-const shuffleItems = (items = []) => {
-  const nextItems = [...items]
-
-  for (let index = nextItems.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1))
-    ;[nextItems[index], nextItems[swapIndex]] = [nextItems[swapIndex], nextItems[index]]
-  }
-
-  return nextItems
-}
+const remapSessionWordsToPool = (sessionWords = [], poolWords = []) =>
+  (sessionWords || [])
+    .map((savedWord) =>
+      poolWords.find(
+        (item) =>
+          item.word === savedWord.word &&
+          item.category === savedWord.category &&
+          item.difficulty === savedWord.difficulty
+      ) || savedWord
+    )
+    .filter(Boolean)
 
 function AssociationGamePage() {
   const navigate = useNavigate()
-  const difficulty = getDifficulty()
-  const category = getCategory()
   const activeSession = getActiveSession()
+  const selectedDifficulty = getDifficulty()
+  const selectedCategory = getCategory()
+  const difficulty =
+    activeSession?.type === 'association' && !activeSession?.isDaily
+      ? activeSession.sessionDifficulty || selectedDifficulty
+      : selectedDifficulty
+  const category =
+    activeSession?.type === 'association' && !activeSession?.isDaily
+      ? activeSession.sessionCategory || selectedCategory
+      : selectedCategory
   const dailyChallengeId = activeSession?.dailyChallengeId || null
   const dailyDateKey = activeSession?.dailyDateKey || null
   const dailyReward = activeSession?.dailyReward || 0
@@ -62,10 +82,10 @@ function AssociationGamePage() {
   const dailyContentType = activeSession?.dailyContentType || null
   const dailySelectionDifficulty = activeSession?.dailySelectionDifficulty || null
   const dailySelectionCategory = activeSession?.dailySelectionCategory || null
-  const savedSessionWordIds = useMemo(
-    () => (activeSession?.type === 'association' ? activeSession.sessionWordIds || [] : []),
-    [activeSession]
-  )
+  const savedSessionWordIds =
+    activeSession?.type === 'association' ? activeSession.sessionWordIds || [] : []
+  const savedSessionWords =
+    activeSession?.type === 'association' ? activeSession.sessionWords || [] : []
   const isDailyMode =
     activeSession?.isDaily === true &&
     activeSession?.type === 'association' &&
@@ -77,6 +97,37 @@ function AssociationGamePage() {
     [difficulty, category]
   )
   const [words, setWords] = useState(fallbackWords)
+  const [sessionWords, setSessionWords] = useState(() => {
+    if (isDailyMode) {
+      return []
+    }
+
+    if (savedSessionWords.length > 0) {
+      return savedSessionWords
+    }
+
+    const mappedSavedWords = savedSessionWordIds
+      .map((itemId) => fallbackWords.find((item) => item.id === itemId))
+      .filter(Boolean)
+
+    if (mappedSavedWords.length > 0) {
+      return mappedSavedWords
+    }
+
+    const initialWordIds = getRotatedSessionItemIds({
+      gameType: 'association',
+      difficulty,
+      category,
+      items: fallbackWords,
+      count: Math.min(5, fallbackWords.length),
+    })
+
+    const initialWords = initialWordIds
+      .map((itemId) => fallbackWords.find((item) => item.id === itemId))
+      .filter(Boolean)
+
+    return initialWords.length ? initialWords : fallbackWords.slice(0, 5)
+  })
   const resolvedDailyContent = useMemo(() => {
     if (!dailyContent) {
       return null
@@ -96,30 +147,14 @@ function AssociationGamePage() {
       ) || dailyContent
     )
   }, [dailyContent, fallbackWords])
-  const resolvedSessionWordIds = useMemo(() => {
-    if (isDailyMode || !words.length) {
-      return []
-    }
-
-    const validIds = savedSessionWordIds.filter((itemId) => words.some((item) => item.id === itemId))
-    if (validIds.length > 0) {
-      return validIds
-    }
-
-    return shuffleItems(words).slice(0, Math.min(5, words.length)).map((item) => item.id)
-  }, [isDailyMode, savedSessionWordIds, words])
 
   const gameWords = useMemo(() => {
     if (isDailyMode) {
       return [resolvedDailyContent].filter(Boolean)
     }
 
-    const selectedWords = resolvedSessionWordIds
-      .map((itemId) => words.find((item) => item.id === itemId))
-      .filter(Boolean)
-
-    return (selectedWords.length ? selectedWords : words.slice(0, 5)).filter(Boolean)
-  }, [isDailyMode, resolvedDailyContent, resolvedSessionWordIds, words])
+    return (sessionWords.length ? sessionWords : words.slice(0, 5)).filter(Boolean)
+  }, [isDailyMode, resolvedDailyContent, sessionWords, words])
 
   useEffect(() => {
     if (isDailyMode) return
@@ -130,12 +165,18 @@ function AssociationGamePage() {
       try {
         const response = await getAssociationContentRequest({ difficulty, category })
         if (!isMounted) return
-        setWords(
+        const nextWords =
           response.items?.length ? mergeWordPools(response.items, fallbackWords) : fallbackWords
+        setWords(nextWords)
+        setSessionWords((prev) =>
+          prev.length ? remapSessionWordsToPool(prev, nextWords) : prev
         )
       } catch {
         if (!isMounted) return
         setWords(fallbackWords)
+        setSessionWords((prev) =>
+          prev.length ? remapSessionWordsToPool(prev, fallbackWords) : prev
+        )
       }
     }
 
@@ -160,6 +201,10 @@ function AssociationGamePage() {
   )
   const [showHint, setShowHint] = useState(
     activeSession?.type === 'association' ? activeSession.showHint || false : false
+  )
+  const [roundFeedback, setRoundFeedback] = useState('')
+  const [wrongAttempts, setWrongAttempts] = useState(
+    activeSession?.type === 'association' ? activeSession.wrongAttempts || 0 : 0
   )
   const [answers, setAnswers] = useState(
     activeSession?.type === 'association' ? activeSession.answers || [] : []
@@ -187,6 +232,9 @@ function AssociationGamePage() {
   )
   const hintCount = hintUsedSteps.length + revealedHintCount
   const displayScore = Math.max(0, score - BASE_SCORE)
+  const currentPromptLabel = [currentWord?.symbol, ...currentClues.slice(0, revealedCount)]
+    .filter(Boolean)
+    .join(', ')
 
   useEffect(() => {
     if (hasExpiredDailySession) {
@@ -211,6 +259,8 @@ function AssociationGamePage() {
 
     saveActiveSession({
       type: 'association',
+      sessionDifficulty: isDailyMode ? null : difficulty,
+      sessionCategory: isDailyMode ? null : category,
       index,
       answer,
       score,
@@ -230,11 +280,14 @@ function AssociationGamePage() {
       hintUsedSteps,
       hintCount,
       revealedClues,
-      sessionWordIds: isDailyMode ? [] : resolvedSessionWordIds,
+      sessionWordIds: isDailyMode ? [] : sessionWords.map((item) => item.id).filter(Boolean),
+      sessionWords: isDailyMode ? [] : sessionWords,
+      wrongAttempts,
     })
   }, [
     answer,
     answers,
+    category,
     correct,
     dailyChallengeId,
     resolvedDailyContent,
@@ -249,11 +302,13 @@ function AssociationGamePage() {
     hintUsedSteps,
     index,
     isDailyMode,
+    difficulty,
     revealedClues,
-    resolvedSessionWordIds,
+    sessionWords,
     score,
     showHint,
     startedAt,
+    wrongAttempts,
     hasExpiredDailySession,
   ])
 
@@ -296,16 +351,21 @@ function AssociationGamePage() {
       updatedCorrect += 1
     } else if (trimmedAnswer) {
       updatedScore = Math.max(0, updatedScore - WRONG_ANSWER_PENALTY)
+      setScore(updatedScore)
+      setWrongAttempts((prev) => prev + 1)
+      setRoundFeedback(`Netacno: "${trimmedAnswer}". Pokusaj ponovo.`)
+      return
     }
 
     const updatedAnswers = [
       ...answers,
       {
-        prompt: currentClues.slice(0, revealedCount).join(', '),
+        prompt: currentPromptLabel,
         answer: trimmedAnswer || '(bez odgovora)',
         accepted: evaluation.accepted,
         hintUsed: hintAlreadyUsedForCurrentStep,
         solution: currentWord.word,
+        symbol: currentWord.symbol || '',
         revealedCount,
         totalClues: currentClues.length,
         roundDifficulty: currentWord.difficulty || difficulty,
@@ -315,6 +375,7 @@ function AssociationGamePage() {
     setScore(updatedScore)
     setCorrect(updatedCorrect)
     setAnswers(updatedAnswers)
+    setRoundFeedback('')
 
     if (index < gameWords.length - 1) {
       const nextIndex = index + 1
@@ -363,6 +424,7 @@ function AssociationGamePage() {
       difficulty: currentWord.difficulty,
       isDaily: isDailyMode,
       hintCount,
+      wrongAttempts,
       answers: updatedAnswers,
       username: currentUser?.username,
       dailyChallengeId: isDailyMode ? dailyChallengeId : null,
@@ -400,6 +462,7 @@ function AssociationGamePage() {
       difficulty: currentWord.difficulty,
       isDaily: finalHistoryEntry.isDaily,
       hintCount,
+      wrongAttempts,
       dailyReward: finalHistoryEntry.dailyReward || 0,
       awardedPoints: finalHistoryEntry.awardedPoints || earnedPoints,
     })
@@ -431,6 +494,16 @@ function AssociationGamePage() {
             </span>
           </div>
 
+          {currentWord?.symbol ? (
+            <div className="association-symbol-card">
+              <small>POCETNI SIMBOL</small>
+              <strong>{currentWord.symbol}</strong>
+              <p className="muted small-text">
+                Simbol je dodatni trag uz otvorene pojmove.
+              </p>
+            </div>
+          ) : null}
+
           <div className="logic-grid">
             {currentClues.map((clue, clueIndex) => (
               <div key={`${clue}-${clueIndex}`} className="logic-box">
@@ -452,8 +525,15 @@ function AssociationGamePage() {
             type="text"
             placeholder="Unesi pojam koji povezuje tragove..."
             value={answer}
-            onChange={(event) => setAnswer(event.target.value)}
+            onChange={(event) => {
+              if (roundFeedback) {
+                setRoundFeedback('')
+              }
+              setAnswer(event.target.value)
+            }}
           />
+
+          {roundFeedback ? <p className="error game-inline-feedback">{roundFeedback}</p> : null}
 
           {showHint && (
             <p className="muted small-text">

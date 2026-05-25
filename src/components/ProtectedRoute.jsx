@@ -1,4 +1,5 @@
 import { Navigate } from 'react-router-dom'
+import LevelThemeEffects from './LevelThemeEffects'
 import MessagePopup from './MessagePopup'
 import { getAuthToken, getCurrentUser } from '../utils/storage'
 
@@ -17,6 +18,7 @@ function ProtectedRoute({ children, adminOnly = false }) {
   return (
     <>
       {children}
+      <LevelThemeEffects currentUser={currentUser} />
       <MessagePopup />
     </>
   )

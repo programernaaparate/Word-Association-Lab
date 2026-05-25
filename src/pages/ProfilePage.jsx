@@ -19,6 +19,7 @@ import {
   logoutUser,
   saveCurrentUser,
 } from '../utils/storage'
+import { getLevelTheme } from '../utils/levelTheme'
 
 const getHistoryPoints = (history) =>
   history.reduce(
@@ -154,6 +155,7 @@ function ProfilePage() {
   const username = user?.username || 'Korisnik'
   const role = user?.role === 'admin' ? 'Administrator' : 'Lab igrac'
   const levelData = getLevelProgress(displayPoints)
+  const levelTheme = getLevelTheme(levelData.level)
 
   const formatSessionType = (type) => {
     if (type === 'logic') return 'Logicki izazov'
@@ -211,11 +213,12 @@ function ProfilePage() {
         <Navbar title="Profil" showBack />
 
         <div className="page-content profile-page">
-          <div className="profile-page-card">
+          <div className={`profile-page-card level-hero-card ${levelTheme.tier}`}>
             <div className="profile-big-avatar">{username.charAt(0).toUpperCase()}</div>
 
             <h2>{username}</h2>
             <p className="muted">{role}</p>
+            <span className="level-rank-chip profile-rank-chip">{levelTheme.title}</span>
             {error ? <p className="error">{error}</p> : null}
 
             <div className="profile-stats">
@@ -343,7 +346,7 @@ function ProfilePage() {
               )}
 
               <button
-                className="secondary-btn full-btn"
+                className="danger-btn logout-btn full-btn"
                 type="button"
                 onClick={() => {
                   logoutUser()

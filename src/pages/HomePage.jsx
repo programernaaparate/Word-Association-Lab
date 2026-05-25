@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import AppIcon from '../components/AppIcon'
 import BottomNav from '../components/BottomNav'
 import { getCurrentUserRequest, getDailyChallengeRequest } from '../utils/api'
+import { getLevelTheme } from '../utils/levelTheme'
 import {
   calculateLevelFromPoints,
   clearActiveSession,
@@ -32,6 +33,8 @@ const ALL_CATEGORIES = [
   'Tehnologija',
   'Geografija',
 ]
+
+const AUTO_EXPAND_CATEGORIES_BREAKPOINT = 640
 
 const getMillisecondsUntilNextDailyReset = () => {
   const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -78,10 +81,16 @@ function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState(getCategory())
   const [selectedDifficulty, setSelectedDifficulty] = useState(getDifficulty())
   const [showAllCategories, setShowAllCategories] = useState(false)
+  const [shouldAutoExpandCategories, setShouldAutoExpandCategories] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      window.innerWidth >= AUTO_EXPAND_CATEGORIES_BREAKPOINT
+  )
   const [dailyChallenge, setDailyChallenge] = useState(null)
   const [dailyError, setDailyError] = useState('')
   const [dailyDateKey, setDailyDateKey] = useState(() => getTodayKey())
   const hasContinuableSession = Boolean(activeSession?.type) && !isExpiredDailySession(activeSession)
+  const hasSavedWordChainSession = activeSession?.type === 'word-chain'
   const historyPoints = getCurrentUserGameHistory().reduce(
     (sum, item) => sum + Math.max(0, Number(item.awardedPoints ?? item.earnedPoints ?? 0) || 0),
     0
@@ -91,11 +100,30 @@ function HomePage() {
     Number(user?.level || 1),
     calculateLevelFromPoints(displayPoints)
   )
+  const levelTheme = getLevelTheme(displayLevel)
 
   const visibleCategories = useMemo(
-    () => (showAllCategories ? ALL_CATEGORIES : ALL_CATEGORIES.slice(0, 5)),
-    [showAllCategories]
+    () =>
+      shouldAutoExpandCategories || showAllCategories
+        ? ALL_CATEGORIES
+        : ALL_CATEGORIES.slice(0, 7),
+    [shouldAutoExpandCategories, showAllCategories]
   )
+  const shouldShowCategoryToggle =
+    !shouldAutoExpandCategories && ALL_CATEGORIES.length > 7
+
+  useEffect(() => {
+    const handleResize = () => {
+      setShouldAutoExpandCategories(window.innerWidth >= AUTO_EXPAND_CATEGORIES_BREAKPOINT)
+    }
+
+    handleResize()
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -259,17 +287,19 @@ function HomePage() {
   }
 
   const handleContinue = () => {
-    if (isExpiredDailySession(activeSession)) {
+    const latestSession = getActiveSession()
+
+    if (isExpiredDailySession(latestSession)) {
       clearActiveSession()
       return
     }
 
-    if (!activeSession?.type) {
+    if (!latestSession?.type) {
       navigate('/association-game')
       return
     }
 
-    navigateToSessionType(activeSession.type)
+    navigateToSessionType(latestSession.type)
   }
 
   const handleNewSession = () => {
@@ -280,6 +310,16 @@ function HomePage() {
   const handleFreshGameStart = (route) => {
     clearActiveSession()
     navigate(route)
+  }
+
+  const handleWordChainStart = () => {
+    if (hasSavedWordChainSession) {
+      navigate('/word-chain')
+      return
+    }
+
+    clearActiveSession()
+    navigate('/word-chain')
   }
 
   const handleDailyGameStart = () => {
@@ -341,7 +381,7 @@ function HomePage() {
         </div>
 
         <div className="page-content home-page">
-          <div className="home-profile-card">
+          <div className={`home-profile-card level-hero-card ${levelTheme.tier}`}>
             <div className="home-avatar-wrap">
               <div className="home-avatar">{user?.username?.charAt(0)?.toUpperCase() || 'M'}</div>
               <span className="home-online-dot"></span>
@@ -349,7 +389,10 @@ function HomePage() {
 
             <div className="home-profile-text">
               <h2>Zdravo, {user?.username || 'Marko'}!</h2>
-              <p>Lab istrazivac - Nivo {displayLevel}</p>
+              <p>
+                {levelTheme.title} - Nivo {displayLevel}
+              </p>
+              <span className="level-rank-chip">{levelTheme.accentLabel}</span>
             </div>
 
             <div className="home-points-box">
@@ -392,13 +435,16 @@ function HomePage() {
             <div className="home-section-row">
               <h3 className="home-section-title">KATEGORIJE</h3>
 
-              <button
-                className="home-link-button"
-                onClick={() => setShowAllCategories((prev) => !prev)}
-                type="button"
-              >
-                {showAllCategories ? 'Sakrij' : 'Vidi sve'}
-              </button>
+              {shouldShowCategoryToggle ? (
+                <button
+                  className="home-link-button home-link-toggle"
+                  onClick={() => setShowAllCategories((prev) => !prev)}
+                  type="button"
+                >
+                  <span>{showAllCategories ? 'Sakrij' : 'Vidi sve'}</span>
+                  <AppIcon name={showAllCategories ? 'arrow-up' : 'arrow-down'} size={12} />
+                </button>
+              ) : null}
             </div>
 
             <div className="category-row">
@@ -444,73 +490,129 @@ function HomePage() {
             <div className="daily-percent">{dailyChallenge?.progress ?? 0}%</div>
           </button>
 
-          <button className="start-session-btn" onClick={handleNewSession} type="button">
-            <span className="start-icon">Start</span>
-            <span>Pocni novu sesiju</span>
-            <span className="start-arrow">{'>'}</span>
-          </button>
+          <section className="home-section">
+            <div className="home-section-row">
+              <h3 className="home-section-title">BRZE OPCIJE</h3>
+              <span className="home-section-note">Navigacija i pomoc</span>
+            </div>
 
-          <div className="home-mini-grid">
-            <button className="home-mini-card" onClick={handleContinue} type="button">
-              <div className="mini-icon soft-blue-box">
-                <AppIcon name="play" size={20} />
-              </div>
-              <span>{hasContinuableSession ? 'Nastavi sesiju' : 'Brzi start'}</span>
-            </button>
+            <div className="home-mini-grid">
+              <button className="home-mini-card" onClick={handleContinue} type="button">
+                <div className="mini-icon soft-blue-box">
+                  <AppIcon name="play" size={20} />
+                </div>
+                <span>{hasContinuableSession ? 'Nastavi sesiju' : 'Brzi start'}</span>
+              </button>
 
-            <button className="home-mini-card" onClick={() => navigate('/history')} type="button">
-              <div className="mini-icon soft-green-box">
-                <AppIcon name="chart" size={20} />
-              </div>
-              <span>Napredak</span>
-            </button>
+              <button className="home-mini-card" onClick={() => navigate('/history')} type="button">
+                <div className="mini-icon soft-green-box">
+                  <AppIcon name="chart" size={20} />
+                </div>
+                <span>Napredak</span>
+              </button>
+
+              <button className="home-mini-card" onClick={() => navigate('/guide')} type="button">
+                <div className="mini-icon soft-blue-box">
+                  <AppIcon name="guide" size={20} />
+                </div>
+                <span>Uputstvo</span>
+              </button>
+
+              {user?.role === 'admin' ? (
+                <button
+                  className="home-mini-card"
+                  onClick={() => navigate('/explore')}
+                  type="button"
+                >
+                  <div className="mini-icon soft-green-box">
+                    <AppIcon name="search" size={20} />
+                  </div>
+                  <span>Baza sadrzaja</span>
+                </button>
+              ) : (
+                <button
+                  className="home-mini-card"
+                  onClick={() => navigate('/profile')}
+                  type="button"
+                >
+                  <div className="mini-icon soft-blue-box">
+                    <AppIcon name="user" size={20} />
+                  </div>
+                  <span>Profil</span>
+                </button>
+              )}
+            </div>
+          </section>
+
+          <section className="home-section">
+            <div className="home-section-row">
+              <h3 className="home-section-title">IZABERI IGRU</h3>
+              <span className="home-section-note">Odavde pokreces modove</span>
+            </div>
 
             <button
-              className="home-mini-card"
-              onClick={() => handleFreshGameStart('/logic-challenge')}
+              className="start-session-btn association-cta"
+              onClick={handleNewSession}
               type="button"
             >
-              <div className="mini-icon soft-blue-box">
-                <AppIcon name="logic" size={20} />
-              </div>
-              <span>Zajednicki pojam</span>
+              <span className="start-icon">
+                <AppIcon name="play" size={18} />
+              </span>
+              <span className="start-copy">
+                <strong>Asocijacije</strong>
+                <small>Pokreni novu rundu</small>
+              </span>
+              <span className="start-arrow">{'>'}</span>
             </button>
 
-            <button
-              className="home-mini-card"
-              onClick={() => handleFreshGameStart('/relation-game')}
-              type="button"
-            >
-              <div className="mini-icon soft-green-box">
-                <AppIcon name="relation" size={20} />
-              </div>
-              <span>Sinonim / Antonim</span>
-            </button>
-
-            <button
-              className="home-mini-card"
-              onClick={() => handleFreshGameStart('/word-chain')}
-              type="button"
-            >
-              <div className="mini-icon soft-blue-box">
-                <AppIcon name="chain" size={20} />
-              </div>
-              <span>Lanac rijeci</span>
-            </button>
-
-            {user?.role === 'admin' && (
+            <div className="home-mini-grid home-games-grid">
               <button
-                className="home-mini-card"
-                onClick={() => navigate('/explore')}
+                className="home-mini-card home-game-card game-logic"
+                onClick={() => handleFreshGameStart('/logic-challenge')}
+                type="button"
+              >
+                <div className="mini-icon soft-blue-box">
+                  <AppIcon name="logic" size={20} />
+                </div>
+                <div className="home-game-copy">
+                  <strong>Zajednicki pojam</strong>
+                  <small>Povezi kartice jednim pojmom</small>
+                </div>
+              </button>
+
+              <button
+                className="home-mini-card home-game-card game-relation"
+                onClick={() => handleFreshGameStart('/relation-game')}
                 type="button"
               >
                 <div className="mini-icon soft-green-box">
-                  <AppIcon name="search" size={20} />
+                  <AppIcon name="relation" size={20} />
                 </div>
-                <span>Baza sadrzaja</span>
+                <div className="home-game-copy">
+                  <strong>Sinonim / Antonim</strong>
+                  <small>Prepoznaj odnos izmedju rijeci</small>
+                </div>
               </button>
-            )}
-          </div>
+
+              <button
+                className="home-mini-card home-game-card game-chain"
+                onClick={handleWordChainStart}
+                type="button"
+              >
+                <div className="mini-icon soft-blue-box">
+                  <AppIcon name="chain" size={20} />
+                </div>
+                <div className="home-game-copy">
+                  <strong>Lanac rijeci</strong>
+                  <small>
+                    {hasSavedWordChainSession
+                      ? 'Nastavi svoj postojeci lanac'
+                      : 'Napravi smislen niz veza'}
+                  </small>
+                </div>
+              </button>
+            </div>
+          </section>
 
           <button
             className="leaderboard-large-btn"
@@ -518,7 +620,7 @@ function HomePage() {
             type="button"
           >
             <AppIcon name="trophy" size={20} />
-            <span>Tabela lidera</span>
+            <span>Rang lista</span>
           </button>
 
           {user?.role === 'admin' && (

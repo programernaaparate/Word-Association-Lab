@@ -4,11 +4,13 @@ import {
   DEFAULT_RELATION_CHALLENGES as RELATION_CONTENT_MATRIX,
   DEFAULT_WORD_CHAIN_PRESETS,
 } from './defaultGameContent'
+import { evaluateSmartConceptAnswer, repairLegacyText } from './localSmartMatching'
 
 const DEFAULT_ASSOCIATION_WORDS = [
   {
     id: 1,
     word: 'Sunce',
+    symbol: '☀️',
     category: 'Priroda',
     difficulty: 'Lako',
     clues: ['Dan', 'Toplota', 'Svjetlost', 'Ljeto'],
@@ -18,6 +20,7 @@ const DEFAULT_ASSOCIATION_WORDS = [
   {
     id: 2,
     word: 'More',
+    symbol: '🌊',
     category: 'Priroda',
     difficulty: 'Srednje',
     clues: ['Talas', 'So', 'Plaza', 'Obala'],
@@ -27,15 +30,17 @@ const DEFAULT_ASSOCIATION_WORDS = [
   {
     id: 3,
     word: 'Knjiga',
+    symbol: '📚',
     category: 'Umjetnost',
     difficulty: 'Lako',
-    clues: ['Stranice', 'Citanje', 'Biblioteka', 'Autor'],
+    clues: ['Stranice', '?itanje', 'Biblioteka', 'Autor'],
     hint: 'Predmet koji citamo i iz koga ucimo ili uzivamo u prici.',
     acceptedAnswers: ['knjiga', 'roman'],
   },
   {
     id: 4,
     word: 'Galaksija',
+    symbol: '🌌',
     category: 'Nauka',
     difficulty: 'Tesko',
     clues: ['Zvijezde', 'Kosmos', 'Mliječni put', 'Svemir'],
@@ -45,6 +50,7 @@ const DEFAULT_ASSOCIATION_WORDS = [
   {
     id: 5,
     word: 'Trcanje',
+    symbol: '🏃',
     category: 'Sport',
     difficulty: 'Lako',
     clues: ['Brzina', 'Trka', 'Atletika', 'Koraci'],
@@ -172,6 +178,7 @@ const DEFAULT_DIFFICULTY = 'Srednje'
 const DEFAULT_CATEGORY = 'Priroda'
 const ALL_CATEGORY = 'Sve'
 const AUTH_TOKEN_KEY = 'authToken'
+const RECENT_CONTENT_ROTATIONS_KEY = 'recentContentRotations'
 const DIFFICULTY_ORDER = ['Lako', 'Srednje', 'Tesko']
 
 const readStorage = (key, fallback) => {
@@ -185,6 +192,17 @@ const readStorage = (key, fallback) => {
 
 const writeStorage = (key, value) => {
   localStorage.setItem(key, JSON.stringify(value))
+}
+
+const shuffleItems = (items = []) => {
+  const nextItems = [...items]
+
+  for (let index = nextItems.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1))
+    ;[nextItems[index], nextItems[swapIndex]] = [nextItems[swapIndex], nextItems[index]]
+  }
+
+  return nextItems
 }
 
 export const getTodayKey = () => {
@@ -218,58 +236,67 @@ const normalizeCategory = (category) => {
 }
 
 const normalizeText = (value = '') =>
-  value
+  repairLegacyText(value)
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .trim()
 
-const normalizeSemanticText = (value = '') =>
-  normalizeText(value)
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
+const sanitizeTextArray = (values = []) =>
+  (values || []).map((value) => repairLegacyText(value)).filter(Boolean)
 
-const collapseTrailingLetters = (value = '') =>
-  value.replace(/\b([a-z0-9]+?)([a-z])\2+\b/g, '$1$2')
+const sanitizeContentItem = (item = {}) => ({
+  ...item,
+  word: repairLegacyText(item.word || ''),
+  symbol: repairLegacyText(item.symbol || ''),
+  category: repairLegacyText(item.category || ''),
+  difficulty: repairLegacyText(item.difficulty || ''),
+  clue: repairLegacyText(item.clue || ''),
+  hint: repairLegacyText(item.hint || ''),
+  answer: repairLegacyText(item.answer || ''),
+  leftWord: repairLegacyText(item.leftWord || ''),
+  rightWord: repairLegacyText(item.rightWord || ''),
+  acceptedAnswers: sanitizeTextArray(item.acceptedAnswers || []),
+  clues: sanitizeTextArray(item.clues || []),
+  words: sanitizeTextArray(item.words || []),
+})
 
-const trimTrailingVowel = (value = '') =>
-  value
-    .split(' ')
-    .map((token) => {
-      if (token.length <= 4) {
-        return token
-      }
+const sanitizeContentItems = (items = []) => (items || []).map(sanitizeContentItem)
 
-      return token.replace(/[aeiou]$/, '')
-    })
-    .join(' ')
-
-const buildMeaningfulAnswerVariants = (value = '') => {
-  const base = normalizeSemanticText(value)
-  if (!base) {
-    return []
-  }
-
-  const collapsed = normalizeSemanticText(collapseTrailingLetters(base))
-  const trimmedVowel = normalizeSemanticText(trimTrailingVowel(base))
-  const collapsedTrimmedVowel = normalizeSemanticText(
-    trimTrailingVowel(collapseTrailingLetters(base))
-  )
-
-  return [...new Set([base, collapsed, trimmedVowel, collapsedTrimmedVowel].filter(Boolean))]
-}
+const sanitizeWordChainPreset = (preset = {}) => ({
+  centerWord: repairLegacyText(preset.centerWord || ''),
+  starterNodes: (preset.starterNodes || []).map((node) => ({
+    ...node,
+    word: repairLegacyText(node.word || ''),
+    relation: repairLegacyText(node.relation || ''),
+  })),
+})
 
 const mergeDefaultItems = (baseItems, extraItems, getKey) => {
   const mergedMap = new Map()
 
   ;[...(baseItems || []), ...(extraItems || [])].forEach((item) => {
     const itemKey = getKey(item)
-    if (!itemKey || mergedMap.has(itemKey)) {
+    if (!itemKey) {
       return
     }
 
-    mergedMap.set(itemKey, item)
+    const existingItem = mergedMap.get(itemKey)
+
+    if (!existingItem) {
+      mergedMap.set(itemKey, item)
+      return
+    }
+
+    mergedMap.set(itemKey, {
+      ...existingItem,
+      ...item,
+      acceptedAnswers: [
+        ...new Set([...(existingItem.acceptedAnswers || []), ...(item.acceptedAnswers || [])]),
+      ],
+      clues: item.clues?.length ? item.clues : existingItem.clues,
+      words: item.words?.length ? item.words : existingItem.words,
+    })
   })
 
   return Array.from(mergedMap.values())
@@ -495,7 +522,7 @@ export const getAssociationWords = () => {
   )
   const storedWords = readStorage('associationWords', [])
 
-  return mergeDefaultItems(storedWords, defaultWords, (item) => item.word)
+  return sanitizeContentItems(mergeDefaultItems(storedWords, defaultWords, (item) => item.word))
 }
 
 export const saveAssociationWords = (words) => {
@@ -524,10 +551,12 @@ export const getLogicChallenges = () => {
   )
   const storedChallenges = readStorage('logicChallenges', [])
 
-  return mergeDefaultItems(
+  return sanitizeContentItems(
+    mergeDefaultItems(
     storedChallenges,
     defaultChallenges,
     (item) => `${item.mode}-${item.answer}-${item.category}-${item.difficulty}`
+  )
   )
 }
 
@@ -562,11 +591,13 @@ export const getRelationChallenges = () => {
   )
   const storedChallenges = readStorage('relationChallenges', [])
 
-  return mergeDefaultItems(
+  return sanitizeContentItems(
+    mergeDefaultItems(
     storedChallenges,
     defaultChallenges,
     (item) =>
       `${item.leftWord}-${item.rightWord}-${item.relation}-${item.category}-${item.difficulty}`
+  )
   )
 }
 
@@ -665,6 +696,65 @@ export const getCategory = () => {
   return localStorage.getItem('category') || DEFAULT_CATEGORY
 }
 
+const getRecentContentRotations = () => {
+  return readStorage(RECENT_CONTENT_ROTATIONS_KEY, {})
+}
+
+const saveRecentContentRotations = (value) => {
+  writeStorage(RECENT_CONTENT_ROTATIONS_KEY, value)
+}
+
+const buildContentRotationKey = ({ gameType, difficulty, category, mode = 'default' }) =>
+  [
+    gameType || 'game',
+    normalizeCategory(category),
+    difficulty || DEFAULT_DIFFICULTY,
+    mode || 'default',
+  ].join('::')
+
+export const getRotatedSessionItemIds = ({
+  gameType,
+  difficulty = DEFAULT_DIFFICULTY,
+  category = DEFAULT_CATEGORY,
+  mode = 'default',
+  items = [],
+  count = 5,
+} = {}) => {
+  const validItems = (items || []).filter((item) => item?.id !== undefined && item?.id !== null)
+  if (!validItems.length) {
+    return []
+  }
+
+  const idMap = new Map(validItems.map((item) => [String(item.id), item.id]))
+  const uniqueIds = [...idMap.keys()]
+  const maxCount = Math.max(1, Math.min(Number(count) || 1, uniqueIds.length))
+  const rotationKey = buildContentRotationKey({ gameType, difficulty, category, mode })
+  const rotations = getRecentContentRotations()
+  const seenIds = (rotations[rotationKey] || []).filter((itemId) => uniqueIds.includes(itemId))
+  const unseenIds = uniqueIds.filter((itemId) => !seenIds.includes(itemId))
+
+  let selectedIds = shuffleItems(unseenIds).slice(0, maxCount)
+
+  if (selectedIds.length < maxCount) {
+    const remainingIds = shuffleItems(
+      uniqueIds.filter((itemId) => !selectedIds.includes(itemId))
+    )
+    selectedIds = [...selectedIds, ...remainingIds.slice(0, maxCount - selectedIds.length)]
+  }
+
+  let nextSeenIds = [...new Set([...seenIds, ...selectedIds])]
+  if (nextSeenIds.length >= uniqueIds.length) {
+    nextSeenIds = [...selectedIds]
+  }
+
+  saveRecentContentRotations({
+    ...rotations,
+    [rotationKey]: nextSeenIds,
+  })
+
+  return selectedIds.map((itemId) => idMap.get(itemId)).filter(Boolean)
+}
+
 export const calculateLevelFromPoints = (points = 0) => {
   return Math.floor(points / 1000) + 1
 }
@@ -739,9 +829,11 @@ export const getWordChainPreset = (
       : `${normalizedCategory}-${difficulty}`
 
   return (
-    DEFAULT_WORD_CHAIN_PRESETS[presetKey] ||
-    DEFAULT_WORD_CHAIN_PRESETS[`${DEFAULT_CATEGORY}-${difficulty}`] ||
-    DEFAULT_WORD_CHAIN_PRESETS[`${DEFAULT_CATEGORY}-${DEFAULT_DIFFICULTY}`]
+    sanitizeWordChainPreset(
+      DEFAULT_WORD_CHAIN_PRESETS[presetKey] ||
+        DEFAULT_WORD_CHAIN_PRESETS[`${DEFAULT_CATEGORY}-${difficulty}`] ||
+        DEFAULT_WORD_CHAIN_PRESETS[`${DEFAULT_CATEGORY}-${DEFAULT_DIFFICULTY}`]
+    )
   )
 }
 
@@ -775,24 +867,7 @@ export const evaluateExactAnswer = (expectedAnswer, actualAnswer) => {
 }
 
 export const evaluateLogicAnswer = (challenge, actualAnswer) => {
-  const actualVariants = buildMeaningfulAnswerVariants(actualAnswer)
-  if (!actualVariants.length) {
-    return { accepted: false, matchedAnswer: null }
-  }
-
-  const acceptedAnswers = [
-    challenge?.answer || '',
-    ...(challenge?.acceptedAnswers || []),
-  ]
-    .flatMap((item) => buildMeaningfulAnswerVariants(item))
-    .filter(Boolean)
-
-  const matchedAnswer = acceptedAnswers.find((item) => actualVariants.includes(item))
-
-  return {
-    accepted: Boolean(matchedAnswer),
-    matchedAnswer: matchedAnswer || null,
-  }
+  return evaluateSmartConceptAnswer(challenge, actualAnswer)
 }
 
 export const getGameHistory = () => {
@@ -880,6 +955,7 @@ export const clearAllAppData = () => {
     'dailyChallengeOverride',
     'difficulty',
     'category',
+    RECENT_CONTENT_ROTATIONS_KEY,
     'progressVersion',
   ].forEach((key) => localStorage.removeItem(key))
 }
@@ -892,7 +968,7 @@ export const getExploreIndex = () => {
     description: item.hint,
     category: item.category,
     difficulty: item.difficulty,
-    meta: (item.clues || []).join(', '),
+    meta: [item.symbol, ...(item.clues || [])].filter(Boolean).join(', '),
   }))
 
   const logicChallenges = getLogicChallenges().map((item) => ({

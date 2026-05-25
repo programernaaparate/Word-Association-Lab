@@ -4,7 +4,7 @@ import AppIcon from './AppIcon'
 const navItems = [
   { key: 'home', label: 'Pocetna', icon: 'home', path: '/home' },
   { key: 'history', label: 'Napredak', icon: 'chart', path: '/history' },
-  { key: 'leaderboard', label: 'Tabela', icon: 'trophy', path: '/leaderboard' },
+  { key: 'leaderboard', label: 'Rang lista', icon: 'trophy', path: '/leaderboard' },
   { key: 'profile', label: 'Profil', icon: 'user', path: '/profile' },
 ]
 

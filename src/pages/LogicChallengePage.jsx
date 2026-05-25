@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import GameHelpModal from '../components/GameHelpModal'
 import Navbar from '../components/Navbar'
-import { getLogicContentRequest } from '../utils/api'
+import { evaluateAiConceptAnswerRequest, getLogicContentRequest } from '../utils/api'
 import { syncCompletedGame } from '../utils/gameSync'
 import {
   calculateLogicReward,
@@ -11,10 +11,12 @@ import {
 import {
   clearActiveSession,
   getActiveSession,
+  getAuthToken,
   getCategory,
   getCurrentUser,
   getDifficulty,
   getLogicChallengesByDifficulty,
+  getRotatedSessionItemIds,
   isExpiredDailySession,
   evaluateLogicAnswer,
   saveActiveSession,
@@ -46,22 +48,65 @@ const mergeLogicPools = (primaryItems = [], fallbackItems = []) => {
   return Array.from(itemMap.values())
 }
 
-const shuffleItems = (items = []) => {
-  const nextItems = [...items]
+const buildLogicChallengeKey = (item = {}) =>
+  `${item.mode || 'concept'}-${item.answer || ''}-${item.category || ''}-${item.difficulty || ''}-${(
+    item.words || []
+  ).join('|')}`
 
-  for (let index = nextItems.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1))
-    ;[nextItems[index], nextItems[swapIndex]] = [nextItems[swapIndex], nextItems[index]]
-  }
+const remapLogicSessionChallengesToPool = (sessionChallenges = [], poolChallenges = []) =>
+  (sessionChallenges || [])
+    .map((savedChallenge) => {
+      const savedKey = buildLogicChallengeKey(savedChallenge)
 
-  return nextItems
+      return (
+        poolChallenges.find(
+          (item) =>
+            (savedChallenge.id && item.id === savedChallenge.id) ||
+            buildLogicChallengeKey(item) === savedKey
+        ) || savedChallenge
+      )
+    })
+    .filter(Boolean)
+
+const pickLogicSessionChallenges = ({
+  challenges = [],
+  difficulty,
+  category,
+  mode,
+  count = 4,
+}) => {
+  const availableChallenges = challenges.filter((item) => (item.mode || 'concept') === mode)
+  const challengePool = availableChallenges.length > 0 ? availableChallenges : challenges
+  const selectedIds = getRotatedSessionItemIds({
+    gameType: 'logic',
+    difficulty,
+    category,
+    mode,
+    items: challengePool,
+    count: Math.min(count, challengePool.length),
+  })
+  const selectedChallenges = selectedIds
+    .map((itemId) => challengePool.find((item) => item.id === itemId))
+    .filter(Boolean)
+
+  return selectedChallenges.length ? selectedChallenges : challengePool.slice(0, count)
 }
 
 function LogicChallengePage() {
   const navigate = useNavigate()
-  const difficulty = getDifficulty()
-  const category = getCategory()
+  const token = getAuthToken()
+  const aiEvaluationEnabled = import.meta.env.VITE_ENABLE_AI_EVALUATION === 'true'
   const activeSession = getActiveSession()
+  const selectedDifficulty = getDifficulty()
+  const selectedCategory = getCategory()
+  const difficulty =
+    activeSession?.type === 'logic' && !activeSession?.isDaily
+      ? activeSession.sessionDifficulty || selectedDifficulty
+      : selectedDifficulty
+  const category =
+    activeSession?.type === 'logic' && !activeSession?.isDaily
+      ? activeSession.sessionCategory || selectedCategory
+      : selectedCategory
   const dailyChallengeId = activeSession?.dailyChallengeId || null
   const dailyDateKey = activeSession?.dailyDateKey || null
   const dailyReward = activeSession?.dailyReward || 0
@@ -72,6 +117,8 @@ function LogicChallengePage() {
   const dailySelectionCategory = activeSession?.dailySelectionCategory || null
   const savedSessionChallengeIds =
     activeSession?.type === 'logic' ? activeSession.sessionChallengeIds || [] : []
+  const savedSessionChallenges =
+    activeSession?.type === 'logic' ? activeSession.sessionChallenges || [] : []
   const isDailyMode =
     activeSession?.isDaily === true &&
     activeSession?.type === 'logic' &&
@@ -85,14 +132,40 @@ function LogicChallengePage() {
         ? dailyContent?.mode || 'concept'
         : 'concept'
 
-  const fallbackChallenges = useMemo(
-    () => getLogicChallengesByDifficulty(difficulty, category),
-    [difficulty, category]
-  )
+  const fallbackChallenges = getLogicChallengesByDifficulty(difficulty, category)
   const [allChallenges, setAllChallenges] = useState(fallbackChallenges)
   const [mode, setMode] = useState(initialMode)
-  const [sessionChallengeIds, setSessionChallengeIds] = useState(savedSessionChallengeIds)
+  const [sessionChallenges, setSessionChallenges] = useState(() => {
+    if (isDailyMode) {
+      return []
+    }
+
+    if (savedSessionChallenges.length > 0) {
+      return savedSessionChallenges
+    }
+
+    const mappedSavedChallenges = savedSessionChallengeIds
+      .map((itemId) => fallbackChallenges.find((item) => item.id === itemId))
+      .filter(Boolean)
+
+    if (mappedSavedChallenges.length > 0) {
+      return mappedSavedChallenges
+    }
+
+    return pickLogicSessionChallenges({
+      challenges: fallbackChallenges,
+      difficulty,
+      category,
+      mode: initialMode,
+      count: Math.min(4, fallbackChallenges.length),
+    })
+  })
   const [showHelpModal, setShowHelpModal] = useState(false)
+
+  const filteredChallenges = useMemo(() => {
+    const byMode = allChallenges.filter((item) => (item.mode || 'concept') === mode)
+    return byMode.length > 0 ? byMode : allChallenges
+  }, [allChallenges, mode])
 
   useEffect(() => {
     if (isDailyMode) return
@@ -103,14 +176,20 @@ function LogicChallengePage() {
       try {
         const response = await getLogicContentRequest({ difficulty, category })
         if (!isMounted) return
-        setAllChallenges(
+        const nextChallenges =
           response.items?.length
             ? mergeLogicPools(response.items, fallbackChallenges)
             : fallbackChallenges
+        setAllChallenges(nextChallenges)
+        setSessionChallenges((prev) =>
+          prev.length ? remapLogicSessionChallengesToPool(prev, nextChallenges) : prev
         )
       } catch {
         if (!isMounted) return
         setAllChallenges(fallbackChallenges)
+        setSessionChallenges((prev) =>
+          prev.length ? remapLogicSessionChallengesToPool(prev, fallbackChallenges) : prev
+        )
       }
     }
 
@@ -121,35 +200,13 @@ function LogicChallengePage() {
     }
   }, [category, difficulty, fallbackChallenges, isDailyMode])
 
-  const filteredChallenges = useMemo(() => {
-    const byMode = allChallenges.filter((item) => (item.mode || 'concept') === mode)
-    return byMode.length > 0 ? byMode : allChallenges
-  }, [allChallenges, mode])
-
-  const resolvedSessionChallengeIds = useMemo(() => {
-    if (isDailyMode || !filteredChallenges.length) {
-      return []
-    }
-
-    const validIds = sessionChallengeIds.filter((itemId) =>
-      filteredChallenges.some((item) => item.id === itemId)
-    )
-
-    if (validIds.length > 0) {
-      return validIds
-    }
-
-    return shuffleItems(filteredChallenges)
-      .slice(0, Math.min(4, filteredChallenges.length))
-      .map((item) => item.id)
-  }, [filteredChallenges, isDailyMode, sessionChallengeIds])
-
-  const defaultChallenges = resolvedSessionChallengeIds
-    .map((itemId) => filteredChallenges.find((item) => item.id === itemId))
-    .filter(Boolean)
   const dailyChallenges = isDailyMode ? [dailyContent].filter(Boolean) : []
   const gameChallenges = (
-    isDailyMode ? dailyChallenges : defaultChallenges.length ? defaultChallenges : filteredChallenges.slice(0, 4)
+    isDailyMode
+      ? dailyChallenges
+      : sessionChallenges.length
+        ? sessionChallenges
+        : filteredChallenges.slice(0, 4)
   ).filter(Boolean)
 
   const [index, setIndex] = useState(
@@ -164,8 +221,15 @@ function LogicChallengePage() {
   const [correct, setCorrect] = useState(
     activeSession?.type === 'logic' ? activeSession.correct || 0 : 0
   )
+  const [partialCount, setPartialCount] = useState(
+    activeSession?.type === 'logic' ? activeSession.partialCount || 0 : 0
+  )
   const [answers, setAnswers] = useState(
     activeSession?.type === 'logic' ? activeSession.answers || [] : []
+  )
+  const [roundFeedback, setRoundFeedback] = useState('')
+  const [wrongAttempts, setWrongAttempts] = useState(
+    activeSession?.type === 'logic' ? activeSession.wrongAttempts || 0 : 0
   )
   const [showHint, setShowHint] = useState(
     activeSession?.type === 'logic' ? activeSession.showHint ?? false : false
@@ -258,11 +322,14 @@ function LogicChallengePage() {
 
     saveActiveSession({
       type: 'logic',
+      sessionDifficulty: isDailyMode ? null : difficulty,
+      sessionCategory: isDailyMode ? null : category,
       mode,
       index,
       answer,
       score,
       correct,
+      partialCount,
       answers,
       showHint,
       startedAt,
@@ -277,12 +344,18 @@ function LogicChallengePage() {
       dailySelectionCategory: isDailyMode ? dailySelectionCategory : null,
       hintUsedSteps,
       hintCount,
-      sessionChallengeIds: isDailyMode ? [] : resolvedSessionChallengeIds,
+      sessionChallengeIds: isDailyMode
+        ? []
+        : sessionChallenges.map((item) => item.id).filter(Boolean),
+      sessionChallenges: isDailyMode ? [] : sessionChallenges,
+      wrongAttempts,
     })
   }, [
     answer,
     answers,
+    category,
     correct,
+    partialCount,
     dailyChallengeId,
     dailyContent,
     dailyContentId,
@@ -296,16 +369,26 @@ function LogicChallengePage() {
     hintUsedSteps,
     index,
     isDailyMode,
+    difficulty,
     mode,
-    resolvedSessionChallengeIds,
+    sessionChallenges,
     score,
     showHint,
     startedAt,
+    wrongAttempts,
     hasExpiredDailySession,
   ])
 
   const handleModeChange = (nextMode) => {
     if (isDailyMode) return
+
+    const nextSessionChallenges = pickLogicSessionChallenges({
+      challenges: allChallenges,
+      difficulty,
+      category,
+      mode: nextMode,
+      count: Math.min(4, allChallenges.length),
+    })
 
     setMode(nextMode)
     setIndex(0)
@@ -315,7 +398,7 @@ function LogicChallengePage() {
     setScore(BASE_SCORE)
     setShowHint(false)
     setHintUsedSteps([])
-    setSessionChallengeIds([])
+    setSessionChallenges(nextSessionChallenges)
   }
 
   const handleToggleHint = () => {
@@ -332,11 +415,41 @@ function LogicChallengePage() {
     if (!currentChallenge) return
 
     const trimmedAnswer = answer.trim()
-    const evaluation = evaluateLogicAnswer(currentChallenge, trimmedAnswer)
-    const isAccepted = evaluation.accepted
+    let evaluation = evaluateLogicAnswer(currentChallenge, trimmedAnswer)
+    let isAccepted = evaluation.accepted
+    let isPartialAccepted = Boolean(evaluation.partialAccepted)
+
+    if (!isOddOneOut && !isAccepted && trimmedAnswer && token && aiEvaluationEnabled) {
+      try {
+        const aiEvaluation = await evaluateAiConceptAnswerRequest(token, {
+          words: currentChallenge.words,
+          canonicalAnswer: currentChallenge.answer,
+          submittedAnswer: trimmedAnswer,
+          category: currentChallenge.category,
+          difficulty: currentChallenge.difficulty || difficulty,
+        })
+
+        if (aiEvaluation.available && aiEvaluation.accepted) {
+          evaluation = {
+            ...evaluation,
+            accepted: true,
+            partialAccepted: false,
+            matchedAnswer: trimmedAnswer,
+            aiAccepted: true,
+            aiReason: aiEvaluation.reason || '',
+            scoreWeight: 1,
+          }
+          isAccepted = true
+          isPartialAccepted = false
+        }
+      } catch {
+        // Local fallback remains active if AI is unavailable.
+      }
+    }
 
     let updatedScore = score
     let updatedCorrect = correct
+    let updatedPartialCount = partialCount
 
     if (isAccepted) {
       updatedScore += calculateLogicReward({
@@ -345,8 +458,24 @@ function LogicChallengePage() {
         hintUsed: hintAlreadyUsedForCurrentStep,
       })
       updatedCorrect += 1
+    } else if (isPartialAccepted) {
+      updatedScore += Math.max(
+        1,
+        Math.round(
+          calculateLogicReward({
+            difficulty: currentChallenge.difficulty || difficulty,
+            mode: currentChallenge.mode || mode,
+            hintUsed: hintAlreadyUsedForCurrentStep,
+          }) * 0.5
+        )
+      )
+      updatedPartialCount += 1
     } else if (trimmedAnswer) {
       updatedScore = Math.max(0, updatedScore - WRONG_ANSWER_PENALTY)
+      setScore(updatedScore)
+      setWrongAttempts((prev) => prev + 1)
+      setRoundFeedback(`Netacno: "${trimmedAnswer}". Pokusaj ponovo.`)
+      return
     }
 
     const updatedAnswers = [
@@ -355,16 +484,22 @@ function LogicChallengePage() {
         prompt: currentChallenge.words.join(', '),
         answer: trimmedAnswer || '(bez odgovora)',
         accepted: isAccepted,
+        partialAccepted: isPartialAccepted,
+        scoreWeight: isAccepted ? 1 : isPartialAccepted ? 0.5 : 0,
         hintUsed: hintAlreadyUsedForCurrentStep,
         solution: currentChallenge.answer,
         mode: currentChallenge.mode || mode,
         roundDifficulty: currentChallenge.difficulty || difficulty,
+        aiAccepted: Boolean(evaluation.aiAccepted),
+        feedbackReason: evaluation.reason || '',
       },
     ]
 
     setScore(updatedScore)
     setCorrect(updatedCorrect)
+    setPartialCount(updatedPartialCount)
     setAnswers(updatedAnswers)
+    setRoundFeedback('')
 
     if (index < gameChallenges.length - 1) {
       setIndex((prev) => prev + 1)
@@ -375,13 +510,14 @@ function LogicChallengePage() {
 
     const elapsedMs = new Date().getTime() - new Date(startedAt).getTime()
     const seconds = Math.max(1, Math.floor(elapsedMs / 1000))
-    const accuracy = Math.round((updatedCorrect / gameChallenges.length) * 100)
+    const weightedCorrect = updatedCorrect + updatedPartialCount * 0.5
+    const accuracy = Math.round((weightedCorrect / gameChallenges.length) * 100)
     const currentUser = getCurrentUser()
     const finalType = isOddOneOut ? 'logic-odd-one-out' : 'logic'
     const performanceBonus = calculatePerformanceBonus({
       difficulty: currentChallenge.difficulty || difficulty,
       total: gameChallenges.length,
-      correct: updatedCorrect,
+      correct: weightedCorrect,
       time: seconds,
       hintCount,
       type: finalType,
@@ -403,12 +539,14 @@ function LogicChallengePage() {
       dailyReward: fallbackDailyReward,
       total: gameChallenges.length,
       correct: updatedCorrect,
+      partialCount: updatedPartialCount,
       accuracy,
       time: seconds,
       category: currentChallenge.category,
       difficulty: currentChallenge.difficulty,
       isDaily: isDailyMode,
       hintCount,
+      wrongAttempts,
       answers: updatedAnswers,
       username: currentUser?.username,
       dailyChallengeId: isDailyMode ? dailyChallengeId : null,
@@ -437,6 +575,7 @@ function LogicChallengePage() {
       performanceBonus: finalHistoryEntry.performanceBonus ?? performanceBonus,
       total: finalHistoryEntry.total ?? gameChallenges.length,
       correct: finalHistoryEntry.correct ?? updatedCorrect,
+      partialCount: finalHistoryEntry.partialCount ?? updatedPartialCount,
       accuracy: finalHistoryEntry.accuracy ?? accuracy,
       time: finalHistoryEntry.time ?? seconds,
       answers: updatedAnswers,
@@ -444,6 +583,7 @@ function LogicChallengePage() {
       difficulty: currentChallenge.difficulty,
       isDaily: finalHistoryEntry.isDaily,
       hintCount,
+      wrongAttempts,
       dailyReward: finalHistoryEntry.dailyReward || 0,
       awardedPoints: finalHistoryEntry.awardedPoints || earnedPoints,
     })
@@ -547,7 +687,12 @@ function LogicChallengePage() {
                   className={`logic-box logic-option ${
                     answer.trim() === word ? 'selected' : ''
                   }`}
-                  onClick={() => setAnswer(word)}
+                  onClick={() => {
+                    if (roundFeedback) {
+                      setRoundFeedback('')
+                    }
+                    setAnswer(word)
+                  }}
                   aria-pressed={answer.trim() === word}
                 >
                   {word}
@@ -577,10 +722,17 @@ function LogicChallengePage() {
                 type="text"
                 placeholder="Unesi zajednicki pojam..."
                 value={answer}
-                onChange={(event) => setAnswer(event.target.value)}
+                onChange={(event) => {
+                  if (roundFeedback) {
+                    setRoundFeedback('')
+                  }
+                  setAnswer(event.target.value)
+                }}
               />
             </div>
           )}
+
+          {roundFeedback ? <p className="error game-inline-feedback">{roundFeedback}</p> : null}
 
           <p className="muted small-text">
             {isOddOneOut
