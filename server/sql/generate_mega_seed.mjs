@@ -16,6 +16,15 @@ const sqlString = (value) => `'${String(value ?? '').replace(/\\/g, '\\\\').repl
 const sqlJson = (value) => sqlString(JSON.stringify(value))
 const lower = (value) => String(value || '').trim().toLowerCase()
 const unique = (items) => [...new Set(items.filter(Boolean))]
+const logicIdentityWords = (words = []) => words.map((item) => lower(item)).join('|')
+const buildLogicIdentityKey = (item = {}) =>
+  [
+    item.mode || 'concept',
+    lower(item.answer),
+    item.category,
+    item.difficulty,
+    item.mode === 'odd-one-out' ? logicIdentityWords(item.words) : '',
+  ].join('|')
 const chunk = (items, size) =>
   Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
     items.slice(index * size, index * size + size)
@@ -141,6 +150,174 @@ const extraAssociationsLocal = [
   createAssociation('Čitač', 'Tehnologija', 'Srednje', ['Kartica', 'Senzor', 'Ulaz', 'Uređaj'], 'Uređaj koji prepoznaje i očitava podatke.', ['čitač', 'citac'], '📟'),
   createAssociation('Žubor', 'Priroda', 'Tesko', ['Voda', 'Potok', 'Zvuk', 'Tok'], 'Blag i neprekidan zvuk tekuće vode.', ['žubor', 'zubor'], '💧'),
 ]
+
+const associationBoosts = [
+  createAssociation('Molekul', 'Nauka', 'Lako', ['Atomi', 'Veza', 'Hemija', 'Supstanca'], 'Skup povezanih atoma koji grade supstancu.'),
+  createAssociation('Element', 'Nauka', 'Lako', ['Periodni sistem', 'Hemija', 'Simbol', 'Supstanca'], 'Osnovna hemijska vrsta gradjena od iste vrste atoma.'),
+  createAssociation('Genom', 'Nauka', 'Tesko', ['DNK', 'Nasljedje', 'Informacija', 'Sekvenca'], 'Ukupan zapis genetske informacije jednog organizma.'),
+  createAssociation('Odbojka', 'Sport', 'Lako', ['Mreza', 'Servis', 'Tim', 'Smech'], 'Ekipni sport u kojem se lopta prebacuje preko mreze.'),
+  createAssociation('Tenis', 'Sport', 'Lako', ['Reket', 'Mreza', 'Servis', 'Set'], 'Sport sa reketom u kojem igraci prebacuju lopticu preko mreze.'),
+  createAssociation('Hokej', 'Sport', 'Lako', ['Pak', 'Led', 'Palica', 'Gol'], 'Brz ekipni sport koji se najcesce igra na ledu.'),
+  createAssociation('Taktika', 'Sport', 'Tesko', ['Plan', 'Protivnik', 'Strategija', 'Mec'], 'Promisljen nacin igre kojim se dolazi do prednosti.'),
+  createAssociation('Formacija', 'Sport', 'Tesko', ['Raspored', 'Tim', 'Teren', 'Trener'], 'Dogovoreni raspored igraca na terenu tokom meca.'),
+  createAssociation('Bioskop', 'Film', 'Lako', ['Platno', 'Sala', 'Projekcija', 'Publika'], 'Mjesto gdje se filmovi javno prikazuju publici.'),
+  createAssociation('Audicija', 'Film', 'Srednje', ['Uloga', 'Izbor', 'Glumac', 'Proba'], 'Proces biranja glumaca za odredjene uloge.'),
+  createAssociation('Storyboard', 'Film', 'Srednje', ['Kadar', 'Skica', 'Planiranje', 'Sekvenca'], 'Vizuelni plan scena prije samog snimanja filma.'),
+  createAssociation('Scenografija', 'Film', 'Tesko', ['Dekor', 'Prostor', 'Set', 'Vizuelni izgled'], 'Oblikovanje prostora i vizuelnog okruzenja scene.'),
+  createAssociation('Tvrdjava', 'Istorija', 'Lako', ['Zidine', 'Odbrana', 'Kula', 'Opsada'], 'Utvrdjeno mjesto gradjeno radi zastite i odbrane.'),
+  createAssociation('Kraljevina', 'Istorija', 'Lako', ['Kruna', 'Vladar', 'Prijesto', 'Nasljedje'], 'Drzava ili oblast kojom upravlja kralj ili kraljica.'),
+  createAssociation('Dekret', 'Istorija', 'Tesko', ['Odluka', 'Vladar', 'Naredba', 'Dokument'], 'Svecana ili zvanicna odluka izdata autoritetom vlasti.'),
+  createAssociation('Vodopad', 'Priroda', 'Srednje', ['Rijeka', 'Visina', 'Pad', 'Pjena'], 'Mjesto gdje voda naglo pada preko stijena.'),
+  createAssociation('Livada', 'Priroda', 'Srednje', ['Trava', 'Cvijece', 'Ravno', 'Otvoreno'], 'Otvoren travnati prostor bogat biljem i cvijecem.'),
+  createAssociation('Gejzir', 'Priroda', 'Tesko', ['Para', 'Vrela voda', 'Pritisak', 'Izvor'], 'Izvor koji povremeno izbacuje vrelu vodu i paru.'),
+  createAssociation('Balet', 'Umjetnost', 'Lako', ['Ples', 'Pozornica', 'Pokret', 'Ansambl'], 'Scenska umjetnost zasnovana na preciznom plesnom izrazu.'),
+  createAssociation('Basna', 'Umjetnost', 'Lako', ['Pouka', 'Zivotinje', 'Prica', 'Likovi'], 'Kratka prica koja kroz alegoriju nosi pouku.'),
+  createAssociation('Mural', 'Umjetnost', 'Lako', ['Zid', 'Boje', 'Velika slika', 'Ulica'], 'Velika slika oslikana direktno na zidu ili fasadi.'),
+  createAssociation('Alegorija', 'Umjetnost', 'Tesko', ['Simbolika', 'Znacenje', 'Prica', 'Skrivena poruka'], 'Umjetnicki postupak u kojem slika ili prica nosi dublje znacenje.'),
+  createAssociation('Kontrast', 'Umjetnost', 'Tesko', ['Suprotnost', 'Svjetlo', 'Boja', 'Isticanje'], 'Likovni ili vizuelni odnos jakih razlika radi naglasavanja.'),
+  createAssociation('Kursor', 'Tehnologija', 'Lako', ['Mis', 'Ekran', 'Pokazivac', 'Klik'], 'Pokazivac kojim korisnik upravlja po ekranu.'),
+  createAssociation('Pretrazivac', 'Tehnologija', 'Srednje', ['Internet', 'Kartice', 'Adresa', 'Pretraga'], 'Program kojim se otvaraju i pretrazuju web stranice.'),
+  createAssociation('Virtuelizacija', 'Tehnologija', 'Tesko', ['Server', 'Resursi', 'Okruzenje', 'Emulacija'], 'Pokretanje vise logicnih sistema na istom fizickom hardveru.'),
+  createAssociation('Telemetrija', 'Tehnologija', 'Tesko', ['Mjerenje', 'Senzori', 'Prenos', 'Podaci'], 'Daljinsko prikupljanje i slanje tehnickih podataka.'),
+  createAssociation('Rt', 'Geografija', 'Lako', ['Obala', 'More', 'Izbocenje', 'Kopno'], 'Istureni dio kopna koji zalazi u more ili jezero.'),
+  createAssociation('Globus', 'Geografija', 'Lako', ['Zemlja', 'Model', 'Mapa', 'Sfera'], 'Umanjeni sferni prikaz planete Zemlje.'),
+  createAssociation('Kanal', 'Geografija', 'Tesko', ['Voda', 'Prolaz', 'Povezivanje', 'Plovidba'], 'Vjestacki ili prirodni vodeni prolaz koji spaja povrsine.'),
+]
+
+const associationTopUps = [
+  createAssociation('Platno', 'Film', 'Lako', ['Projekcija', 'Bioskop', 'Slika', 'Ekran'], 'Velika povrsina na koju se prikazuje filmska slika.'),
+  createAssociation('Titl', 'Film', 'Lako', ['Tekst', 'Prevod', 'Dijalog', 'Ekran'], 'Pisani prevod ili tekst koji prati govor u filmu.'),
+  createAssociation('Producent', 'Film', 'Srednje', ['Budzet', 'Organizacija', 'Snimanje', 'Tim'], 'Osoba koja vodi produkciju i organizuje nastanak filma.'),
+  createAssociation('Kasting', 'Film', 'Srednje', ['Uloga', 'Izbor', 'Glumci', 'Proba'], 'Proces biranja glumaca za odredjene uloge u filmu.'),
+  createAssociation('Mizanscen', 'Film', 'Tesko', ['Raspored', 'Scena', 'Pokret', 'Vizuelni plan'], 'Nacin na koji su likovi i elementi rasporedjeni unutar scene.'),
+
+  createAssociation('Drzava', 'Geografija', 'Lako', ['Granice', 'Gradjani', 'Mapa', 'Teritorija'], 'Organizovana teritorijalna zajednica sa svojim granicama.'),
+  createAssociation('Okean', 'Geografija', 'Lako', ['Voda', 'Talasi', 'Dubina', 'Prostranstvo'], 'Najveca slana vodena povrsina na Zemlji.'),
+  createAssociation('Klima', 'Geografija', 'Srednje', ['Temperatura', 'Padavine', 'Podneblje', 'Vrijeme'], 'Dugorocan obrazac vremenskih prilika nekog podrucja.'),
+  createAssociation('Regija', 'Geografija', 'Srednje', ['Oblast', 'Podrucje', 'Mapa', 'Granice'], 'Sira oblast koja dijeli neke zajednicke osobine.'),
+  createAssociation('Longituda', 'Geografija', 'Tesko', ['Duzina', 'Koordinate', 'Meridijan', 'Pozicija'], 'Geografska duzina kojom se odredjuje polozaj istocno ili zapadno.'),
+  createAssociation('Geomorfologija', 'Geografija', 'Tesko', ['Reljef', 'Oblici tla', 'Teren', 'Nastanak'], 'Nauka o nastanku i oblicima Zemljine povrsine.'),
+
+  createAssociation('Vitez', 'Istorija', 'Lako', ['Oklop', 'Mac', 'Konj', 'Dvor'], 'Ratnik iz srednjovjekovnog doba vezan za plemstvo i cast.'),
+  createAssociation('Traktat', 'Istorija', 'Srednje', ['Sporazum', 'Drzave', 'Potpis', 'Dogovor'], 'Svecani medjudrzavni ili istorijski sporazum u pisanom obliku.'),
+  createAssociation('Manifest', 'Istorija', 'Tesko', ['Ideje', 'Pokret', 'Program', 'Javna objava'], 'Javna objava stavova, namjera ili programa nekog pokreta.'),
+
+  createAssociation('Magnet', 'Nauka', 'Lako', ['Privlacenje', 'Metal', 'Polje', 'Polovi'], 'Predmet koji privlaci odredjene metale pomocu magnetnog polja.'),
+  createAssociation('Epruveta', 'Nauka', 'Lako', ['Staklo', 'Uzorak', 'Hemija', 'Laboratorija'], 'Uska laboratorijska posuda za male kolicine supstance.'),
+  createAssociation('Teorija', 'Nauka', 'Srednje', ['Objasnjenje', 'Dokaz', 'Model', 'Proucavanje'], 'Sistem ideja kojim se objasnjava neka pojava ili skup pojava.'),
+  createAssociation('Entropija', 'Nauka', 'Tesko', ['Nered', 'Energija', 'Sistem', 'Fizika'], 'Mjera neuredjenosti ili rasipanja energije u sistemu.'),
+
+  createAssociation('Izvor', 'Priroda', 'Srednje', ['Voda', 'Pocetak toka', 'Stijena', 'Potok'], 'Mjesto gdje voda prirodno izbija na povrsinu.'),
+  createAssociation('Koral', 'Priroda', 'Srednje', ['More', 'Hrid', 'Kolonija', 'Organizam'], 'Morski organizam koji gradi grebene i zivi u kolonijama.'),
+  createAssociation('Erozija', 'Priroda', 'Tesko', ['Tlo', 'Voda', 'Trošenje', 'Oblikovanje'], 'Postepeno trošenje i odnošenje zemljista ili stijena.'),
+  createAssociation('Sediment', 'Priroda', 'Tesko', ['Naslage', 'Cestice', 'Talozenje', 'Dno'], 'Materijal koji se talozi na dnu vode ili tla.'),
+
+  createAssociation('Trening', 'Sport', 'Srednje', ['Vjezba', 'Priprema', 'Forma', 'Napredak'], 'Plansko vjezbanje radi boljeg sportskog nastupa.'),
+  createAssociation('Ofsajd', 'Sport', 'Tesko', ['Napad', 'Pravila', 'Fudbal', 'Pozicija'], 'Pravilo koje kaznjava nepravilno postavljanje napadaca.'),
+  createAssociation('Penal', 'Sport', 'Tesko', ['Kazna', 'Sut', 'Gol', 'Prekrsaj'], 'Kazneni udarac dosudjen poslije odredjenog prekrsaja.'),
+
+  createAssociation('Baterija', 'Tehnologija', 'Lako', ['Energija', 'Punjenje', 'Uredjaj', 'Napajanje'], 'Izvor elektricne energije za uredjaje.'),
+  createAssociation('Domen', 'Tehnologija', 'Srednje', ['Web', 'Adresa', 'Internet', 'Sajt'], 'Tekstualna internet adresa koja vodi do sajta ili servisa.'),
+  createAssociation('Ruter', 'Tehnologija', 'Srednje', ['Mreza', 'Signal', 'Internet', 'Povezivanje'], 'Uredjaj koji usmjerava internet saobracaj izmedju mreza.'),
+  createAssociation('Latencija', 'Tehnologija', 'Tesko', ['Kasnjenje', 'Mreza', 'Odgovor', 'Signal'], 'Vrijeme potrebno da odgovor ili podatak stigne od izvora do cilja.'),
+
+  createAssociation('Strip', 'Umjetnost', 'Lako', ['Kadrovi', 'Crtez', 'Oblacic', 'Prica'], 'Prica ispricana nizom crteza i kratkog teksta.'),
+  createAssociation('Maska', 'Umjetnost', 'Lako', ['Lice', 'Pozornica', 'Lik', 'Kostim'], 'Predmet koji prekriva lice radi uloge ili umjetnickog izraza.'),
+  createAssociation('Recital', 'Umjetnost', 'Srednje', ['Izvodjenje', 'Publika', 'Stihovi', 'Scena'], 'Javni nastup posvecen kazivanju ili muzickom izvodjenju.'),
+  createAssociation('Arija', 'Umjetnost', 'Srednje', ['Opera', 'Solo', 'Glas', 'Melodija'], 'Solisticka muzicka numera, posebno poznata iz opere.'),
+  createAssociation('Minimalizam', 'Umjetnost', 'Tesko', ['Svedeno', 'Forma', 'Manje je vise', 'Cistoca'], 'Umjetnicki pristup koji svodi izraz na mali broj elemenata.'),
+  createAssociation('Impresionizam', 'Umjetnost', 'Tesko', ['Svjetlo', 'Potezi', 'Boje', 'Utisak'], 'Umjetnicki pravac koji naglasava trenutni vizuelni utisak.'),
+]
+
+const generatedAssociationBlueprints = {
+  Nauka: [
+    ['Mikroskop', 'Lako', ['Socivo', 'Uvecanje', 'Uzorak', 'Detalj'], 'Instrument za posmatranje veoma sitnih objekata.'],
+    ['Orbita', 'Lako', ['Planeta', 'Kretanje', 'Krug', 'Svemir'], 'Putanja kojom se tijelo krece oko drugog tijela.'],
+    ['Genetika', 'Srednje', ['Nasljedje', 'DNK', 'Osobine', 'Geni'], 'Oblast koja proucava nasljedne osobine zivih bica.'],
+    ['Fosil', 'Srednje', ['Kamen', 'Ostatak', 'Proslost', 'Nalaz'], 'Ocuvani ostatak ili trag davnog zivog bica.'],
+    ['Gravitacija', 'Srednje', ['Privlacenje', 'Pad', 'Masa', 'Sila'], 'Sila koja privlaci tijela jedno ka drugom.'],
+    ['Hormon', 'Tesko', ['Organizam', 'Signal', 'Zlijezda', 'Ravnoteza'], 'Hemijski glasnik koji regulise mnoge procese u tijelu.'],
+    ['Meteorologija', 'Tesko', ['Vrijeme', 'Prognoza', 'Oblaci', 'Padavine'], 'Nauka koja proucava vrijeme i atmosferu.'],
+    ['Tektonika', 'Tesko', ['Ploce', 'Zemljotres', 'Pomjeranje', 'Kora'], 'Proucavanje kretanja i sudara velikih djelova Zemljine kore.'],
+  ],
+  Sport: [
+    ['Boks', 'Lako', ['Rukavice', 'Ring', 'Udarac', 'Runda'], 'Borilacki sport u kojem se protivnici nadmecu udarcima rukama.'],
+    ['Kajak', 'Lako', ['Veslo', 'Rijeka', 'Camac', 'Staza'], 'Usko plovilo kojim se upravlja veslom.'],
+    ['Sudija', 'Srednje', ['Pistaljka', 'Pravila', 'Odluka', 'Mec'], 'Osoba koja sprovodi pravila tokom sportskog takmicenja.'],
+    ['Sprint', 'Srednje', ['Brzina', 'Staza', 'Start', 'Finis'], 'Kratka i veoma brza trka.'],
+    ['Jedrenje', 'Srednje', ['Vjetar', 'Jedro', 'More', 'Kurs'], 'Kretanje plovilom uz pomoc vjetra i jedra.'],
+    ['Kapiten', 'Tesko', ['Tim', 'Vodja', 'Traka', 'Odgovornost'], 'Igrac koji predvodi tim na terenu ili u igri.'],
+    ['Turnir', 'Tesko', ['Parovi', 'Runda', 'Pobjednik', 'Takmicenje'], 'Takmicenje sastavljeno od vise meceva ili rundi.'],
+    ['Finale', 'Tesko', ['Zavrsnica', 'Pehar', 'Pobjednik', 'Navijaci'], 'Poslednji i odlucujuci mec na takmicenju.'],
+  ],
+  Film: [
+    ['Scenario', 'Lako', ['Dijalog', 'Radnja', 'Likovi', 'Stranice'], 'Pisani plan filma sa scenama i dijalozima.'],
+    ['Dubler', 'Lako', ['Zamjena', 'Glumac', 'Akcija', 'Rizik'], 'Osoba koja umjesto glumca izvodi zahtjevne ili opasne scene.'],
+    ['Montaza', 'Srednje', ['Rezovi', 'Kadrovi', 'Ritam', 'Sastavljanje'], 'Faza u kojoj se snimljeni materijal slaze u cjelinu.'],
+    ['Sinopsis', 'Srednje', ['Prica', 'Kratak opis', 'Radnja', 'Pregled'], 'Sazet prikaz sadrzaja filmske price.'],
+    ['Festival', 'Srednje', ['Projekcije', 'Nagrade', 'Publika', 'Grad'], 'Dogadjaj na kojem se prikazuju i vrednuju filmovi.'],
+    ['Animacija', 'Tesko', ['Crtanje', 'Pokret', 'Frejmovi', 'Iluzija'], 'Tehnika stvaranja utiska pokreta od niza slika.'],
+    ['Rasvjeta', 'Tesko', ['Svjetlo', 'Set', 'Sjena', 'Atmosfera'], 'Organizovanje svjetla da bi scena izgledala kako treba.'],
+    ['Trilogija', 'Tesko', ['Tri dijela', 'Nastavak', 'Prica', 'Serijal'], 'Prica ispricana kroz tri medjusobno povezana djela.'],
+  ],
+  Istorija: [
+    ['Povelja', 'Lako', ['Dokument', 'Pravo', 'Potpis', 'Vladar'], 'Svecani pisani akt sa pravilima, pravima ili odlukama.'],
+    ['Ustanak', 'Lako', ['Pobuna', 'Narod', 'Otpor', 'Promjena'], 'Organizovano dizanje protiv vlasti ili okupatora.'],
+    ['Arhiv', 'Srednje', ['Dokumenti', 'Cuvanje', 'Proslo', 'Zapisi'], 'Mjesto gdje se trajno cuvaju vazni istorijski i pravni zapisi.'],
+    ['Opsada', 'Srednje', ['Grad', 'Vojska', 'Zidine', 'Okruzenje'], 'Vojna taktika okruzivanja i iscrpljivanja protivnika.'],
+    ['Bastina', 'Srednje', ['Nasljedje', 'Spomenici', 'Kultura', 'Proslo'], 'Vrijednosti i tragovi koje nam je ostavila proslost.'],
+    ['Imperator', 'Tesko', ['Carstvo', 'Vladar', 'Kruna', 'Moc'], 'Vladar ogromne drzave ili carstva.'],
+    ['Republika', 'Tesko', ['Drzava', 'Gradjani', 'Ustav', 'Vlast'], 'Oblik drzavnog uredjenja bez monarha na celu.'],
+    ['Hronicar', 'Tesko', ['Zapisi', 'Svjedok', 'Proslo', 'Doba'], 'Osoba koja biljezi vazne dogadjaje svog vremena.'],
+  ],
+  Priroda: [
+    ['Potok', 'Lako', ['Voda', 'Tok', 'Obala', 'Sapat'], 'Manji prirodni vodeni tok.'],
+    ['Duga', 'Lako', ['Boje', 'Kisa', 'Nebo', 'Luk'], 'Pojava raznobojnog luka na nebu poslije kise.'],
+    ['Sjeme', 'Lako', ['Biljka', 'Rast', 'Klica', 'Plod'], 'Pocetak novog biljnog zivota iz kojeg nicu biljke.'],
+    ['Munja', 'Srednje', ['Oluja', 'Bljesak', 'Elektricitet', 'Nebo'], 'Jak elektricni prasak u atmosferi tokom nevremena.'],
+    ['Pustinja', 'Srednje', ['Pijesak', 'Susa', 'Toplota', 'Dine'], 'Vrlo suvo podrucje sa malo padavina i biljnog svijeta.'],
+    ['Uvala', 'Srednje', ['Obala', 'More', 'Zakrivljenje', 'Mirna voda'], 'Dio obale koji se blago uvukao u kopno.'],
+    ['Mahovina', 'Tesko', ['Vlaga', 'Kamen', 'Zeleno', 'Sjena'], 'Niska biljka koja raste na vlaznim i sjenovitim mjestima.'],
+    ['Plima', 'Tesko', ['More', 'Mjesec', 'Rast nivoa', 'Obala'], 'Periodican porast nivoa morske vode.'],
+  ],
+  Umjetnost: [
+    ['Atelje', 'Lako', ['Platno', 'Boje', 'Prostor', 'Umjetnik'], 'Radni prostor slikara, vajara ili drugog umjetnika.'],
+    ['Skulptura', 'Lako', ['Kamen', 'Oblik', 'Vajar', 'Figura'], 'Umjetnicko djelo oblikovano u tri dimenzije.'],
+    ['Balet', 'Lako', ['Ples', 'Pozornica', 'Tutu', 'Pokret'], 'Scenska umjetnost zasnovana na skladnom plesnom izrazu.'],
+    ['Sonata', 'Srednje', ['Klavir', 'Stavovi', 'Muzika', 'Kompozitor'], 'Muzicko djelo sa vise povezanih djelova.'],
+    ['Mozaik', 'Srednje', ['Kockice', 'Slika', 'Zid', 'Sastavljanje'], 'Slika ili ukras sastavljen od mnogo malih djelova.'],
+    ['Dirigent', 'Srednje', ['Orkestar', 'Palica', 'Tempo', 'Vodjenje'], 'Osoba koja vodi muzicko izvodjenje ansambla.'],
+    ['Gravura', 'Tesko', ['Metal', 'Otisak', 'Rezbarenje', 'Grafika'], 'Likovni postupak i djelo nastalo urezivanjem i otiskom.'],
+    ['Simfonija', 'Tesko', ['Orkestar', 'Stavovi', 'Zvuk', 'Cjelina'], 'Veliko muzicko djelo napisano za orkestar.'],
+  ],
+  Tehnologija: [
+    ['Procesor', 'Lako', ['Cip', 'Racunanje', 'Jezgro', 'Brzina'], 'Glavna racunarska komponenta koja obradjuje instrukcije.'],
+    ['Senzor', 'Lako', ['Mjerenje', 'Signal', 'Detekcija', 'Uredjaj'], 'Komponenta koja registruje promjenu i pretvara je u podatak.'],
+    ['Aplikacija', 'Srednje', ['Telefon', 'Program', 'Interfejs', 'Koristenje'], 'Softver namijenjen odredjenom zadatku korisnika.'],
+    ['Protokol', 'Srednje', ['Pravila', 'Mreza', 'Razmjena', 'Standard'], 'Skup pravila po kojima uredjaji komuniciraju.'],
+    ['Bekap', 'Srednje', ['Kopija', 'Sigurnost', 'Obnova', 'Podaci'], 'Rezervna kopija vaznih podataka za slucaj problema.'],
+    ['Kompajler', 'Tesko', ['Kod', 'Prevodjenje', 'Programski jezik', 'Izvrsavanje'], 'Program koji prevodi izvorni kod u oblik razumljiv racunaru.'],
+    ['Robotika', 'Tesko', ['Masina', 'Automatika', 'Kretanje', 'Senzori'], 'Oblast koja razvija i upravlja robotima.'],
+    ['Satelit', 'Tesko', ['Orbita', 'Signal', 'Antena', 'Prenos'], 'Uredjaj u svemiru koji prenosi ili prikuplja podatke.'],
+  ],
+  Geografija: [
+    ['Zaliv', 'Lako', ['More', 'Obala', 'Uvlacenje', 'Voda'], 'Dio mora ili okeana uvucen u kopno.'],
+    ['Fjord', 'Lako', ['More', 'Planine', 'Uski zaliv', 'Lednik'], 'Dubok i uzak morski zaliv sa strmim obalama.'],
+    ['Ekvator', 'Srednje', ['Zemlja', 'Sirina', 'Toplota', 'Nulta linija'], 'Zamisljena linija koja dijeli Zemlju na dvije polulopte.'],
+    ['Meridian', 'Srednje', ['Duzina', 'Mapa', 'Linija', 'Vrijeme'], 'Zamisljena linija koja povezuje polove na globusu.'],
+    ['Laguna', 'Srednje', ['Plicak', 'More', 'Obala', 'Mirna voda'], 'Plitka vodena povrsina odvojena od otvorenog mora.'],
+    ['Klisura', 'Tesko', ['Rijeka', 'Usjek', 'Stijene', 'Dubina'], 'Uska i duboka dolina strmih strana.'],
+    ['Kontinent', 'Tesko', ['Kopno', 'Velicina', 'Granice', 'Planeta'], 'Velika cjelina kopna na Zemlji.'],
+    ['Tjesnac', 'Tesko', ['More', 'Prolaz', 'Uski put', 'Obala'], 'Uski morski prolaz izmedju dva kopna.'],
+  ],
+}
+
+const generatedAssociations = Object.entries(generatedAssociationBlueprints).flatMap(
+  ([category, items]) =>
+    items.map(([word, difficulty, clues, hint, acceptedAnswers = [], symbol = '']) =>
+      createAssociation(word, category, difficulty, clues, hint, acceptedAnswers, symbol)
+    )
+)
 
 const manualRelations = [
   { leftWord: 'Tacan', rightWord: 'Precizan', relation: 'Sinonim', category: 'Nauka', difficulty: 'Lako', hint: 'Rijeci imaju gotovo isto znacenje.' },
@@ -362,6 +539,9 @@ const allAssociations = dedupeBy(
     ...DEFAULT_ASSOCIATION_WORDS.map(mapAssociation),
     ...extraAssociations,
     ...extraAssociationsLocal,
+    ...associationBoosts,
+    ...associationTopUps,
+    ...generatedAssociations,
   ],
   (item) => lower(item.word)
 )
@@ -376,17 +556,20 @@ const derivedConceptLogic = allAssociations.map((item) => ({
 }))
 
 const derivedOddOneOutLogic = allAssociations.map((item, index) => {
-  const distractorSource = allAssociations.find(
-    (candidate, candidateIndex) =>
-      candidateIndex !== index &&
+  const distractorPool = allAssociations.filter(
+    (candidate) =>
+      candidate &&
       candidate.category !== item.category &&
-      !item.clues.includes(candidate.clues[0])
-  ) || allAssociations[(index + 1) % allAssociations.length]
+      candidate.word !== item.word &&
+      !item.clues.includes(candidate.word)
+  )
+  const distractorSource =
+    distractorPool[index % distractorPool.length] || allAssociations[(index + 1) % allAssociations.length]
 
   return {
     mode: 'odd-one-out',
-    words: [...item.clues.slice(0, 3), distractorSource.clues[0]],
-    answer: distractorSource.clues[0],
+    words: [...item.clues.slice(0, 3), distractorSource.word],
+    answer: distractorSource.word,
     hint: `Tri pojma vode ka "${item.word}", a jedan ne pripada toj grupi.`,
     category: item.category,
     difficulty: item.difficulty,
@@ -399,17 +582,19 @@ const allLogic = dedupeBy(
     ...derivedConceptLogic,
     ...derivedOddOneOutLogic,
   ],
-  (item) => `${item.mode}|${lower(item.answer)}|${item.category}|${item.difficulty}`
+  buildLogicIdentityKey
 )
 
-const clueRelations = allAssociations.map((item) => ({
-  leftWord: item.word,
-  rightWord: item.clues[0],
-  relation: 'Asocijacija',
-  category: item.category,
-  difficulty: item.difficulty,
-  hint: `Povezi pojam "${item.word}" sa jednim od njegovih tragova.`,
-}))
+const clueRelations = allAssociations.flatMap((item) =>
+  item.clues.slice(0, 2).map((clue) => ({
+    leftWord: item.word,
+    rightWord: clue,
+    relation: 'Asocijacija',
+    category: item.category,
+    difficulty: item.difficulty,
+    hint: `Povezi pojam "${item.word}" sa jednim od njegovih tragova.`,
+  }))
+)
 
 const allRelations = dedupeBy(
   [
@@ -417,7 +602,8 @@ const allRelations = dedupeBy(
     ...manualRelations,
     ...clueRelations,
   ],
-  (item) => `${lower(item.leftWord)}|${lower(item.rightWord)}|${item.relation}`
+  (item) =>
+    `${lower(item.leftWord)}|${lower(item.rightWord)}|${item.relation}|${item.category}|${item.difficulty}`
 )
 
 const buildAssociationInsert = (rows) => `
@@ -450,6 +636,10 @@ LEFT JOIN logic_challenges existing
  AND LOWER(existing.answer) = LOWER(seed.answer)
  AND existing.category = seed.category
  AND existing.difficulty = seed.difficulty
+ AND (
+      seed.mode <> 'odd-one-out'
+      OR CAST(existing.words_json AS CHAR(1000)) = seed.words_json
+    )
 WHERE existing.id IS NULL;`
 
 const buildRelationInsert = (rows) => `
@@ -467,6 +657,8 @@ LEFT JOIN relation_challenges existing
   ON LOWER(existing.left_word) = LOWER(seed.left_word)
  AND LOWER(existing.right_word) = LOWER(seed.right_word)
  AND existing.relation = seed.relation
+ AND existing.category = seed.category
+ AND existing.difficulty = seed.difficulty
 WHERE existing.id IS NULL;`
 
 const buildUsersInsert = async (rows) => {
@@ -532,6 +724,35 @@ WHERE existing.id IS NULL;`
 const associationStatements = chunk(allAssociations, 60).map(buildAssociationInsert)
 const logicStatements = chunk(allLogic, 60).map(buildLogicInsert)
 const relationStatements = chunk(allRelations, 60).map(buildRelationInsert)
+const dedupeAssociationRowsStatement = `
+DELETE duplicate
+FROM association_words duplicate
+JOIN association_words existing
+  ON LOWER(duplicate.word) = LOWER(existing.word)
+ AND duplicate.id > existing.id;`
+const dedupeLogicRowsStatement = `
+DELETE duplicate
+FROM logic_challenges duplicate
+JOIN logic_challenges existing
+  ON duplicate.mode = existing.mode
+ AND LOWER(duplicate.answer) = LOWER(existing.answer)
+ AND duplicate.category = existing.category
+ AND duplicate.difficulty = existing.difficulty
+ AND (
+      duplicate.mode <> 'odd-one-out'
+      OR CAST(duplicate.words_json AS CHAR(1000)) = CAST(existing.words_json AS CHAR(1000))
+    )
+ AND duplicate.id > existing.id;`
+const dedupeRelationRowsStatement = `
+DELETE duplicate
+FROM relation_challenges duplicate
+JOIN relation_challenges existing
+  ON LOWER(duplicate.left_word) = LOWER(existing.left_word)
+ AND LOWER(duplicate.right_word) = LOWER(existing.right_word)
+ AND duplicate.relation = existing.relation
+ AND duplicate.category = existing.category
+ AND duplicate.difficulty = existing.difficulty
+ AND duplicate.id > existing.id;`
 
 const buildFile = async () => {
   const usersStatement = await buildUsersInsert(demoUsers)
@@ -548,6 +769,12 @@ START TRANSACTION;
 -- Logic challenges: ${allLogic.length}
 -- Relation challenges: ${allRelations.length}
 
+${dedupeAssociationRowsStatement}
+
+${dedupeLogicRowsStatement}
+
+${dedupeRelationRowsStatement}
+
 ${usersStatement}
 
 ${associationStatements.join('\n\n')}
@@ -555,6 +782,16 @@ ${associationStatements.join('\n\n')}
 ${logicStatements.join('\n\n')}
 
 ${relationStatements.join('\n\n')}
+
+${dedupeAssociationRowsStatement}
+
+${dedupeLogicRowsStatement}
+
+${dedupeRelationRowsStatement}
+
+UPDATE association_words
+SET clues_json = CAST(${sqlJson(['More', 'Hrid', 'Kolonija', 'Organizam'])} AS JSON)
+WHERE word = 'Koral';
 
 ${submissionsStatement}
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import FirstRunTipCard from '../components/FirstRunTipCard'
 import GameHelpModal from '../components/GameHelpModal'
 import Navbar from '../components/Navbar'
 import { getRelationContentRequest } from '../utils/api'
@@ -7,6 +8,7 @@ import { syncCompletedGame } from '../utils/gameSync'
 import {
   calculatePerformanceBonus,
   calculateRelationReward,
+  resolveComboProgress,
 } from '../utils/gameRewards'
 import {
   clearActiveSession,
@@ -14,12 +16,21 @@ import {
   getCategory,
   getCurrentUser,
   getDifficulty,
+  getNewUnlockedAchievements,
+  getPlayerProgressOverview,
   getRelationChallengesByDifficulty,
   getRotatedSessionItemIds,
+  getSessionRoundSize,
   isExpiredDailySession,
   saveActiveSession,
   saveLastResult,
 } from '../utils/storage'
+import {
+  playCelebrateSound,
+  playHintSound,
+  playSuccessSound,
+  playErrorSound,
+} from '../utils/uiFeedback'
 
 const BASE_SCORE = 1200
 const HINT_PENALTY = 5
@@ -57,13 +68,24 @@ const remapRelationSessionChallengesToPool = (sessionChallenges = [], poolChalle
     })
     .filter(Boolean)
 
-const pickRelationSessionChallenges = ({ challenges = [], difficulty, category, count = 5 }) => {
+const pickRelationSessionChallenges = ({
+  challenges = [],
+  difficulty,
+  category,
+  count = getSessionRoundSize({
+    availableCount: challenges.length,
+    preferredCount: 5,
+    minimumCount: 3,
+  }),
+  commit = true,
+}) => {
   const selectedIds = getRotatedSessionItemIds({
     gameType: 'relation',
     difficulty,
     category,
     items: challenges,
     count: Math.min(count, challenges.length),
+    commit,
   })
   const selectedChallenges = selectedIds
     .map((itemId) => challenges.find((item) => item.id === itemId))
@@ -101,6 +123,7 @@ function RelationGamePage() {
     activeSession?.isDaily === true &&
     activeSession?.type === 'relation' &&
     Boolean(dailyContent)
+  const hasRestoredSession = activeSession?.type === 'relation' && !isDailyMode
   const hasExpiredDailySession = isExpiredDailySession(activeSession)
 
   const fallbackChallenges = useMemo(
@@ -129,7 +152,12 @@ function RelationGamePage() {
       challenges: fallbackChallenges,
       difficulty,
       category,
-      count: Math.min(5, fallbackChallenges.length),
+      count: getSessionRoundSize({
+        availableCount: fallbackChallenges.length,
+        preferredCount: 5,
+        minimumCount: 3,
+      }),
+      commit: false,
     })
   })
   const [showHelpModal, setShowHelpModal] = useState(false)
@@ -139,9 +167,18 @@ function RelationGamePage() {
       return [dailyContent].filter(Boolean)
     }
 
-    return (sessionChallenges.length ? sessionChallenges : allChallenges.slice(0, 5)).filter(
-      Boolean
-    )
+    return (
+      sessionChallenges.length
+        ? sessionChallenges
+        : allChallenges.slice(
+            0,
+            getSessionRoundSize({
+              availableCount: allChallenges.length,
+              preferredCount: 5,
+              minimumCount: 3,
+            })
+          )
+    ).filter(Boolean)
   }, [allChallenges, dailyContent, isDailyMode, sessionChallenges])
 
   useEffect(() => {
@@ -158,15 +195,43 @@ function RelationGamePage() {
             ? mergeRelationPools(response.items, fallbackChallenges)
             : fallbackChallenges
         setAllChallenges(nextChallenges)
-        setSessionChallenges((prev) =>
-          prev.length ? remapRelationSessionChallengesToPool(prev, nextChallenges) : prev
-        )
+        setSessionChallenges((prev) => {
+          if (hasRestoredSession) {
+            return prev.length ? remapRelationSessionChallengesToPool(prev, nextChallenges) : prev
+          }
+
+          return pickRelationSessionChallenges({
+            challenges: nextChallenges,
+            difficulty,
+            category,
+            count: getSessionRoundSize({
+              availableCount: nextChallenges.length,
+              preferredCount: 5,
+              minimumCount: 3,
+            }),
+            commit: true,
+          })
+        })
       } catch {
         if (!isMounted) return
         setAllChallenges(fallbackChallenges)
-        setSessionChallenges((prev) =>
-          prev.length ? remapRelationSessionChallengesToPool(prev, fallbackChallenges) : prev
-        )
+        setSessionChallenges((prev) => {
+          if (hasRestoredSession) {
+            return prev.length ? remapRelationSessionChallengesToPool(prev, fallbackChallenges) : prev
+          }
+
+          return pickRelationSessionChallenges({
+            challenges: fallbackChallenges,
+            difficulty,
+            category,
+            count: getSessionRoundSize({
+              availableCount: fallbackChallenges.length,
+              preferredCount: 5,
+              minimumCount: 3,
+            }),
+            commit: true,
+          })
+        })
       }
     }
 
@@ -175,7 +240,7 @@ function RelationGamePage() {
     return () => {
       isMounted = false
     }
-  }, [category, difficulty, fallbackChallenges, isDailyMode])
+  }, [category, difficulty, fallbackChallenges, hasRestoredSession, isDailyMode])
 
   const [index, setIndex] = useState(
     activeSession?.type === 'relation' ? activeSession.index || 0 : 0
@@ -191,6 +256,15 @@ function RelationGamePage() {
   )
   const [answers, setAnswers] = useState(
     activeSession?.type === 'relation' ? activeSession.answers || [] : []
+  )
+  const [comboStreak, setComboStreak] = useState(
+    activeSession?.type === 'relation' ? activeSession.comboStreak || 0 : 0
+  )
+  const [bestCombo, setBestCombo] = useState(
+    activeSession?.type === 'relation' ? activeSession.bestCombo || 0 : 0
+  )
+  const [comboBonusTotal, setComboBonusTotal] = useState(
+    activeSession?.type === 'relation' ? activeSession.comboBonusTotal || 0 : 0
   )
   const [roundFeedback, setRoundFeedback] = useState('')
   const [wrongAttempts, setWrongAttempts] = useState(
@@ -266,6 +340,9 @@ function RelationGamePage() {
       score,
       correct,
       answers,
+      comboStreak,
+      bestCombo,
+      comboBonusTotal,
       showHint,
       hintUsedSteps,
       hintCount,
@@ -287,8 +364,11 @@ function RelationGamePage() {
     })
   }, [
     answers,
+    bestCombo,
     challenges.length,
     category,
+    comboBonusTotal,
+    comboStreak,
     correct,
     dailyChallengeId,
     dailyContent,
@@ -317,6 +397,7 @@ function RelationGamePage() {
       return
     }
 
+    playHintSound()
     setScore((prev) => Math.max(0, prev - HINT_PENALTY))
     setHintUsedSteps((prev) => [...prev, index])
     setShowHint(true)
@@ -326,15 +407,27 @@ function RelationGamePage() {
     if (!currentChallenge || !selectedRelation) return
 
     const isAccepted = selectedRelation === currentChallenge.relation
+    const comboState = resolveComboProgress({
+      currentCombo: comboStreak,
+      bestCombo,
+      comboBonusTotal,
+      difficulty: currentChallenge.difficulty || difficulty,
+      accepted: isAccepted,
+      hintUsed: hintAlreadyUsedForCurrentStep,
+    })
     const updatedScore = isAccepted
       ? score +
         calculateRelationReward({
           difficulty: currentChallenge.difficulty || difficulty,
           hintUsed: hintAlreadyUsedForCurrentStep,
-        })
+        }) +
+        comboState.awardedComboBonus
       : Math.max(0, score - WRONG_ANSWER_PENALTY)
     const updatedCorrect = isAccepted ? correct + 1 : correct
     const updatedWrongAttempts = isAccepted ? wrongAttempts : wrongAttempts + 1
+    const updatedComboStreak = isAccepted ? comboState.comboStreak : 0
+    const updatedBestCombo = isAccepted ? comboState.bestCombo : bestCombo
+    const updatedComboBonusTotal = isAccepted ? comboState.comboBonusTotal : comboBonusTotal
 
     const updatedAnswers = [
       ...answers,
@@ -345,6 +438,8 @@ function RelationGamePage() {
         hintUsed: hintAlreadyUsedForCurrentStep,
         solution: currentChallenge.relation,
         roundDifficulty: currentChallenge.difficulty || difficulty,
+        comboAfterRound: updatedComboStreak,
+        comboBonusAwarded: comboState.awardedComboBonus,
       },
     ]
 
@@ -353,8 +448,16 @@ function RelationGamePage() {
     setAnswers(updatedAnswers)
     setRoundFeedback('')
     setWrongAttempts(updatedWrongAttempts)
+    setComboStreak(updatedComboStreak)
+    setBestCombo(updatedBestCombo)
+    setComboBonusTotal(updatedComboBonusTotal)
 
     if (index < challenges.length - 1) {
+      if (isAccepted) {
+        playSuccessSound()
+      } else {
+        playErrorSound()
+      }
       setIndex((prev) => prev + 1)
       setSelectedRelation('')
       setShowHint(false)
@@ -365,6 +468,7 @@ function RelationGamePage() {
     const seconds = Math.max(1, Math.floor(elapsedMs / 1000))
     const accuracy = Math.round((updatedCorrect / challenges.length) * 100)
     const currentUser = getCurrentUser()
+    const previousProgress = getPlayerProgressOverview()
     const performanceBonus = calculatePerformanceBonus({
       difficulty: currentChallenge.difficulty || difficulty,
       total: challenges.length,
@@ -388,6 +492,8 @@ function RelationGamePage() {
       roundScore: finalScore,
       performanceBonus,
       dailyReward: fallbackDailyReward,
+      comboBonus: updatedComboBonusTotal,
+      maxCombo: updatedBestCombo,
       total: challenges.length,
       correct: updatedCorrect,
       accuracy,
@@ -417,6 +523,8 @@ function RelationGamePage() {
 
     const syncResult = await syncCompletedGame({ historyEntry, submission })
     const finalHistoryEntry = syncResult.historyEntry
+    const progressSnapshot = getPlayerProgressOverview()
+    const newAchievements = getNewUnlockedAchievements(previousProgress, progressSnapshot)
 
     saveLastResult({
       type: 'relation',
@@ -432,17 +540,26 @@ function RelationGamePage() {
       difficulty: currentChallenge.difficulty,
       hintCount,
       wrongAttempts: updatedWrongAttempts,
+      comboBonus: finalHistoryEntry.comboBonus ?? updatedComboBonusTotal,
+      maxCombo: finalHistoryEntry.maxCombo ?? updatedBestCombo,
+      progressSnapshot,
+      newAchievements,
       isDaily: finalHistoryEntry.isDaily,
       dailyReward: finalHistoryEntry.dailyReward || 0,
-      awardedPoints: finalHistoryEntry.awardedPoints || earnedPoints,
+      awardedPoints: finalHistoryEntry.awardedPoints ?? earnedPoints + fallbackDailyReward,
     })
 
+    if (isAccepted) {
+      playCelebrateSound()
+    } else {
+      playErrorSound()
+    }
     clearActiveSession()
     navigate('/results')
   }
 
   return (
-    <div className="screen">
+    <div className="screen app-screen">
       <div className="phone-card app-shell">
         <Navbar
           title="Sinonim / Antonim"
@@ -457,6 +574,18 @@ function RelationGamePage() {
             <span className="tag neutral">{currentChallenge?.difficulty || difficulty}</span>
             {isDailyMode && <span className="tag green-pill">Dnevni izazov</span>}
           </div>
+
+          <FirstRunTipCard
+            storageKey="relation"
+            eyebrow="Brzi onboarding"
+            title="Vjeruj prvom smislenom odnosu"
+            description="Ako oba pojma zvuce kao isti pravac znacenja, najcesce je sinonim. Ako se sudaraju, idi na antonim."
+            items={[
+              'Asocijacija je za logicnu vezu, ne za isto znacenje.',
+              'Hint koristi kad su i sinonim i asocijacija podjednako moguci.',
+            ]}
+            tone="amber"
+          />
 
           <div className="stat-row">
             <div className="stat-pill">
@@ -474,6 +603,14 @@ function RelationGamePage() {
               <div>
                 <small>SKOR</small>
                 <strong>{displayScore}</strong>
+              </div>
+            </div>
+
+            <div className="stat-pill">
+              <span>COMBO</span>
+              <div>
+                <small>NAJBOLJI</small>
+                <strong>{comboStreak > 0 ? `x${comboStreak}` : `x${bestCombo}`}</strong>
               </div>
             </div>
           </div>
@@ -513,6 +650,8 @@ function RelationGamePage() {
               Pomoc: {currentChallenge?.hint || 'Pomisli na odnos izmedju pojmova.'}
             </p>
           )}
+
+          <p className="muted small-text">Combo bonus do sada: +{comboBonusTotal} XP</p>
 
           <div className="dual-actions">
             <button

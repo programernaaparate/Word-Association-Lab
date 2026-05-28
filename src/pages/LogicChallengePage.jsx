@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import FirstRunTipCard from '../components/FirstRunTipCard'
 import GameHelpModal from '../components/GameHelpModal'
 import Navbar from '../components/Navbar'
 import { evaluateAiConceptAnswerRequest, getLogicContentRequest } from '../utils/api'
@@ -7,6 +8,7 @@ import { syncCompletedGame } from '../utils/gameSync'
 import {
   calculateLogicReward,
   calculatePerformanceBonus,
+  resolveComboProgress,
 } from '../utils/gameRewards'
 import {
   clearActiveSession,
@@ -15,13 +17,22 @@ import {
   getCategory,
   getCurrentUser,
   getDifficulty,
+  getNewUnlockedAchievements,
   getLogicChallengesByDifficulty,
+  getPlayerProgressOverview,
   getRotatedSessionItemIds,
+  getSessionRoundSize,
   isExpiredDailySession,
   evaluateLogicAnswer,
   saveActiveSession,
   saveLastResult,
 } from '../utils/storage'
+import {
+  playCelebrateSound,
+  playErrorSound,
+  playHintSound,
+  playSuccessSound,
+} from '../utils/uiFeedback'
 
 const BASE_SCORE = 1200
 const HINT_PENALTY = 10
@@ -31,7 +42,7 @@ const mergeLogicPools = (primaryItems = [], fallbackItems = []) => {
   const itemMap = new Map()
 
   ;[...fallbackItems, ...primaryItems].forEach((item) => {
-    const itemKey = `${item.mode}-${item.answer}-${item.category}-${item.difficulty}`
+    const itemKey = buildLogicChallengeKey(item)
     const existingItem = itemMap.get(itemKey) || {}
     const mergedAcceptedAnswers = [
       ...(existingItem.acceptedAnswers || []),
@@ -50,8 +61,15 @@ const mergeLogicPools = (primaryItems = [], fallbackItems = []) => {
 
 const buildLogicChallengeKey = (item = {}) =>
   `${item.mode || 'concept'}-${item.answer || ''}-${item.category || ''}-${item.difficulty || ''}-${(
-    item.words || []
+    (item.mode || 'concept') === 'odd-one-out' ? item.words || [] : []
   ).join('|')}`
+
+const normalizeLogicAnswerKey = (value = '') =>
+  String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
 
 const remapLogicSessionChallengesToPool = (sessionChallenges = [], poolChallenges = []) =>
   (sessionChallenges || [])
@@ -68,15 +86,90 @@ const remapLogicSessionChallengesToPool = (sessionChallenges = [], poolChallenge
     })
     .filter(Boolean)
 
+const pickDistinctOddOneOutChallenges = ({
+  challenges = [],
+  difficulty,
+  category,
+  count,
+  commit = true,
+}) => {
+  const groups = new Map()
+
+  ;(challenges || []).forEach((challenge) => {
+    const answerKey = normalizeLogicAnswerKey(challenge.answer)
+    if (!answerKey) {
+      return
+    }
+
+    const group = groups.get(answerKey) || []
+    group.push(challenge)
+    groups.set(answerKey, group)
+  })
+
+  const answerItems = [...groups.keys()].map((answerKey) => ({ id: answerKey }))
+  const selectedAnswerKeys = getRotatedSessionItemIds({
+    gameType: 'logic-odd-answer',
+    difficulty,
+    category,
+    mode: 'odd-one-out-answer',
+    items: answerItems,
+    count: Math.min(count, answerItems.length),
+    commit,
+  })
+
+  return selectedAnswerKeys
+    .map((answerKey) => {
+      const groupedChallenges = groups.get(String(answerKey)) || []
+
+      if (!groupedChallenges.length) {
+        return null
+      }
+
+      const [selectedChallengeId] = getRotatedSessionItemIds({
+        gameType: 'logic-odd-variant',
+        difficulty,
+        category,
+        mode: `odd-one-out-${String(answerKey)}`,
+        items: groupedChallenges,
+        count: 1,
+        commit,
+      })
+
+      return (
+        groupedChallenges.find((challenge) => challenge.id === selectedChallengeId) ||
+        groupedChallenges[0]
+      )
+    })
+    .filter(Boolean)
+}
+
 const pickLogicSessionChallenges = ({
   challenges = [],
   difficulty,
   category,
   mode,
-  count = 4,
+  count = getSessionRoundSize({
+    availableCount: challenges.filter((item) => (item.mode || 'concept') === mode).length || challenges.length,
+    preferredCount: 4,
+    minimumCount: 2,
+  }),
+  commit = true,
 }) => {
   const availableChallenges = challenges.filter((item) => (item.mode || 'concept') === mode)
   const challengePool = availableChallenges.length > 0 ? availableChallenges : challenges
+
+  if ((mode || 'concept') === 'odd-one-out') {
+    const distinctChallenges = pickDistinctOddOneOutChallenges({
+      challenges: challengePool,
+      difficulty,
+      category,
+      count,
+      commit,
+    })
+
+    return distinctChallenges.length ? distinctChallenges : challengePool.slice(0, count)
+  }
+
   const selectedIds = getRotatedSessionItemIds({
     gameType: 'logic',
     difficulty,
@@ -84,6 +177,7 @@ const pickLogicSessionChallenges = ({
     mode,
     items: challengePool,
     count: Math.min(count, challengePool.length),
+    commit,
   })
   const selectedChallenges = selectedIds
     .map((itemId) => challengePool.find((item) => item.id === itemId))
@@ -123,6 +217,7 @@ function LogicChallengePage() {
     activeSession?.isDaily === true &&
     activeSession?.type === 'logic' &&
     Boolean(dailyContent)
+  const hasRestoredSession = activeSession?.type === 'logic' && !isDailyMode
   const hasExpiredDailySession = isExpiredDailySession(activeSession)
 
   const initialMode =
@@ -157,7 +252,12 @@ function LogicChallengePage() {
       difficulty,
       category,
       mode: initialMode,
-      count: Math.min(4, fallbackChallenges.length),
+      count: getSessionRoundSize({
+        availableCount: fallbackChallenges.length,
+        preferredCount: 4,
+        minimumCount: 2,
+      }),
+      commit: false,
     })
   })
   const [showHelpModal, setShowHelpModal] = useState(false)
@@ -181,15 +281,45 @@ function LogicChallengePage() {
             ? mergeLogicPools(response.items, fallbackChallenges)
             : fallbackChallenges
         setAllChallenges(nextChallenges)
-        setSessionChallenges((prev) =>
-          prev.length ? remapLogicSessionChallengesToPool(prev, nextChallenges) : prev
-        )
+        setSessionChallenges((prev) => {
+          if (hasRestoredSession) {
+            return prev.length ? remapLogicSessionChallengesToPool(prev, nextChallenges) : prev
+          }
+
+          return pickLogicSessionChallenges({
+            challenges: nextChallenges,
+            difficulty,
+            category,
+            mode: initialMode,
+            count: getSessionRoundSize({
+              availableCount: nextChallenges.length,
+              preferredCount: 4,
+              minimumCount: 2,
+            }),
+            commit: true,
+          })
+        })
       } catch {
         if (!isMounted) return
         setAllChallenges(fallbackChallenges)
-        setSessionChallenges((prev) =>
-          prev.length ? remapLogicSessionChallengesToPool(prev, fallbackChallenges) : prev
-        )
+        setSessionChallenges((prev) => {
+          if (hasRestoredSession) {
+            return prev.length ? remapLogicSessionChallengesToPool(prev, fallbackChallenges) : prev
+          }
+
+          return pickLogicSessionChallenges({
+            challenges: fallbackChallenges,
+            difficulty,
+            category,
+            mode: initialMode,
+            count: getSessionRoundSize({
+              availableCount: fallbackChallenges.length,
+              preferredCount: 4,
+              minimumCount: 2,
+            }),
+            commit: true,
+          })
+        })
       }
     }
 
@@ -198,7 +328,7 @@ function LogicChallengePage() {
     return () => {
       isMounted = false
     }
-  }, [category, difficulty, fallbackChallenges, isDailyMode])
+  }, [category, difficulty, fallbackChallenges, hasRestoredSession, initialMode, isDailyMode])
 
   const dailyChallenges = isDailyMode ? [dailyContent].filter(Boolean) : []
   const gameChallenges = (
@@ -206,7 +336,14 @@ function LogicChallengePage() {
       ? dailyChallenges
       : sessionChallenges.length
         ? sessionChallenges
-        : filteredChallenges.slice(0, 4)
+        : filteredChallenges.slice(
+            0,
+            getSessionRoundSize({
+              availableCount: filteredChallenges.length,
+              preferredCount: 4,
+              minimumCount: 2,
+            })
+          )
   ).filter(Boolean)
 
   const [index, setIndex] = useState(
@@ -226,6 +363,15 @@ function LogicChallengePage() {
   )
   const [answers, setAnswers] = useState(
     activeSession?.type === 'logic' ? activeSession.answers || [] : []
+  )
+  const [comboStreak, setComboStreak] = useState(
+    activeSession?.type === 'logic' ? activeSession.comboStreak || 0 : 0
+  )
+  const [bestCombo, setBestCombo] = useState(
+    activeSession?.type === 'logic' ? activeSession.bestCombo || 0 : 0
+  )
+  const [comboBonusTotal, setComboBonusTotal] = useState(
+    activeSession?.type === 'logic' ? activeSession.comboBonusTotal || 0 : 0
   )
   const [roundFeedback, setRoundFeedback] = useState('')
   const [wrongAttempts, setWrongAttempts] = useState(
@@ -252,7 +398,7 @@ function LogicChallengePage() {
   const helperDescription = isOddOneOut
     ? 'Tri pojma pripadaju istoj grupi, a jedan odskace. Trazi uljeza.'
     : 'Pronadji jednu rijec ili pojam koji najbolje povezuje sve kartice.'
-  const canSubmit = isOddOneOut ? Boolean(answer.trim()) : true
+  const canSubmit = Boolean(answer.trim())
   const helpSections = isOddOneOut
     ? [
         {
@@ -331,6 +477,9 @@ function LogicChallengePage() {
       correct,
       partialCount,
       answers,
+      comboStreak,
+      bestCombo,
+      comboBonusTotal,
       showHint,
       startedAt,
       isDaily: isDailyMode,
@@ -353,7 +502,10 @@ function LogicChallengePage() {
   }, [
     answer,
     answers,
+    bestCombo,
     category,
+    comboBonusTotal,
+    comboStreak,
     correct,
     partialCount,
     dailyChallengeId,
@@ -395,9 +547,14 @@ function LogicChallengePage() {
     setAnswer('')
     setAnswers([])
     setCorrect(0)
+    setPartialCount(0)
     setScore(BASE_SCORE)
+    setComboStreak(0)
+    setBestCombo(0)
+    setComboBonusTotal(0)
     setShowHint(false)
     setHintUsedSteps([])
+    setWrongAttempts(0)
     setSessionChallenges(nextSessionChallenges)
   }
 
@@ -406,6 +563,7 @@ function LogicChallengePage() {
       return
     }
 
+    playHintSound()
     setScore((prev) => Math.max(0, prev - HINT_PENALTY))
     setHintUsedSteps((prev) => [...prev, index])
     setShowHint(true)
@@ -450,15 +608,46 @@ function LogicChallengePage() {
     let updatedScore = score
     let updatedCorrect = correct
     let updatedPartialCount = partialCount
+    let updatedComboStreak = comboStreak
+    let updatedBestCombo = bestCombo
+    let updatedComboBonusTotal = comboBonusTotal
+    let awardedComboBonus = 0
 
     if (isAccepted) {
+      const comboState = resolveComboProgress({
+        currentCombo: comboStreak,
+        bestCombo,
+        comboBonusTotal,
+        difficulty: currentChallenge.difficulty || difficulty,
+        accepted: true,
+        hintUsed: hintAlreadyUsedForCurrentStep,
+      })
+
+      updatedComboStreak = comboState.comboStreak
+      updatedBestCombo = comboState.bestCombo
+      updatedComboBonusTotal = comboState.comboBonusTotal
+      awardedComboBonus = comboState.awardedComboBonus
       updatedScore += calculateLogicReward({
         difficulty: currentChallenge.difficulty || difficulty,
         mode: currentChallenge.mode || mode,
         hintUsed: hintAlreadyUsedForCurrentStep,
       })
+      updatedScore += awardedComboBonus
       updatedCorrect += 1
     } else if (isPartialAccepted) {
+      const comboState = resolveComboProgress({
+        currentCombo: comboStreak,
+        bestCombo,
+        comboBonusTotal,
+        difficulty: currentChallenge.difficulty || difficulty,
+        partialAccepted: true,
+        hintUsed: hintAlreadyUsedForCurrentStep,
+      })
+
+      updatedComboStreak = comboState.comboStreak
+      updatedBestCombo = comboState.bestCombo
+      updatedComboBonusTotal = comboState.comboBonusTotal
+      awardedComboBonus = comboState.awardedComboBonus
       updatedScore += Math.max(
         1,
         Math.round(
@@ -469,12 +658,15 @@ function LogicChallengePage() {
           }) * 0.5
         )
       )
+      updatedScore += awardedComboBonus
       updatedPartialCount += 1
     } else if (trimmedAnswer) {
       updatedScore = Math.max(0, updatedScore - WRONG_ANSWER_PENALTY)
       setScore(updatedScore)
       setWrongAttempts((prev) => prev + 1)
+      setComboStreak(0)
       setRoundFeedback(`Netacno: "${trimmedAnswer}". Pokusaj ponovo.`)
+      playErrorSound()
       return
     }
 
@@ -492,6 +684,8 @@ function LogicChallengePage() {
         roundDifficulty: currentChallenge.difficulty || difficulty,
         aiAccepted: Boolean(evaluation.aiAccepted),
         feedbackReason: evaluation.reason || '',
+        comboAfterRound: updatedComboStreak,
+        comboBonusAwarded: awardedComboBonus,
       },
     ]
 
@@ -499,9 +693,15 @@ function LogicChallengePage() {
     setCorrect(updatedCorrect)
     setPartialCount(updatedPartialCount)
     setAnswers(updatedAnswers)
+    setComboStreak(updatedComboStreak)
+    setBestCombo(updatedBestCombo)
+    setComboBonusTotal(updatedComboBonusTotal)
     setRoundFeedback('')
 
     if (index < gameChallenges.length - 1) {
+      if (isAccepted || isPartialAccepted) {
+        playSuccessSound()
+      }
       setIndex((prev) => prev + 1)
       setAnswer('')
       setShowHint(false)
@@ -513,6 +713,7 @@ function LogicChallengePage() {
     const weightedCorrect = updatedCorrect + updatedPartialCount * 0.5
     const accuracy = Math.round((weightedCorrect / gameChallenges.length) * 100)
     const currentUser = getCurrentUser()
+    const previousProgress = getPlayerProgressOverview()
     const finalType = isOddOneOut ? 'logic-odd-one-out' : 'logic'
     const performanceBonus = calculatePerformanceBonus({
       difficulty: currentChallenge.difficulty || difficulty,
@@ -537,6 +738,8 @@ function LogicChallengePage() {
       roundScore: finalScore,
       performanceBonus,
       dailyReward: fallbackDailyReward,
+      comboBonus: updatedComboBonusTotal,
+      maxCombo: updatedBestCombo,
       total: gameChallenges.length,
       correct: updatedCorrect,
       partialCount: updatedPartialCount,
@@ -567,6 +770,8 @@ function LogicChallengePage() {
 
     const syncResult = await syncCompletedGame({ historyEntry, submission })
     const finalHistoryEntry = syncResult.historyEntry
+    const progressSnapshot = getPlayerProgressOverview()
+    const newAchievements = getNewUnlockedAchievements(previousProgress, progressSnapshot)
 
     saveLastResult({
       type: finalType,
@@ -584,16 +789,21 @@ function LogicChallengePage() {
       isDaily: finalHistoryEntry.isDaily,
       hintCount,
       wrongAttempts,
+      comboBonus: finalHistoryEntry.comboBonus ?? updatedComboBonusTotal,
+      maxCombo: finalHistoryEntry.maxCombo ?? updatedBestCombo,
+      progressSnapshot,
+      newAchievements,
       dailyReward: finalHistoryEntry.dailyReward || 0,
-      awardedPoints: finalHistoryEntry.awardedPoints || earnedPoints,
+      awardedPoints: finalHistoryEntry.awardedPoints ?? earnedPoints + fallbackDailyReward,
     })
 
+    playCelebrateSound()
     clearActiveSession()
     navigate('/results')
   }
 
   return (
-    <div className="screen">
+    <div className="screen app-screen">
       <div className="phone-card app-shell">
         <Navbar
           title={`Izazov: ${difficulty}`}
@@ -608,6 +818,17 @@ function LogicChallengePage() {
             <span className="tag neutral">{currentChallenge?.difficulty || difficulty}</span>
             {isDailyMode && <span className="tag green-pill">Dnevni izazov</span>}
           </div>
+
+          <FirstRunTipCard
+            storageKey="logic"
+            eyebrow="Brzi onboarding"
+            title="Trazi zajednicku logiku, ne samo slicne rijeci"
+            description="Najbolje prolaze odgovori koji opisuju grupu, funkciju ili osobinu koja spaja pojmove."
+            items={[
+              'U modu Ne pripada trazi 3 pojma koji cine jasnu grupu.',
+              'Ako nisi siguran, kratka pomoc vrijedi manje od promasenog pokusaja.',
+            ]}
+          />
 
           <div className="stat-row">
             <div className="stat-pill">
@@ -625,6 +846,14 @@ function LogicChallengePage() {
               <div>
                 <small>SKOR</small>
                 <strong>{displayScore}</strong>
+              </div>
+            </div>
+
+            <div className="stat-pill">
+              <span>COMBO</span>
+              <div>
+                <small>NAJBOLJI</small>
+                <strong>{comboStreak > 0 ? `x${comboStreak}` : `x${bestCombo}`}</strong>
               </div>
             </div>
           </div>
@@ -663,6 +892,9 @@ function LogicChallengePage() {
                   : isOddOneOut
                     ? 'Pogledaj koja tri pojma prirodno pripadaju istoj grupi.'
                     : 'Razmisli o jednoj grupi, oblasti ili pojmu koji sve spaja.'}
+              </p>
+              <p className="muted small-text">
+                Combo bonus do sada: +{comboBonusTotal} XP
               </p>
             </div>
 

@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import AppIcon from '../components/AppIcon'
 import BottomNav from '../components/BottomNav'
 import Navbar from '../components/Navbar'
@@ -60,8 +61,10 @@ const quickStartSteps = [
 ]
 
 function GuidePage() {
+  const navigate = useNavigate()
+
   return (
-    <div className="screen">
+    <div className="screen app-screen">
       <div className="phone-card app-shell">
         <Navbar title="Uputstvo" showBack />
 
@@ -166,6 +169,15 @@ function GuidePage() {
                 </p>
               </div>
             </div>
+          </section>
+
+          <section className="guide-action-row">
+            <button className="secondary-btn" type="button" onClick={() => navigate('/leaderboard')}>
+              Rang lista
+            </button>
+            <button className="primary-btn" type="button" onClick={() => navigate('/home')}>
+              Nazad na pocetnu
+            </button>
           </section>
         </div>
 

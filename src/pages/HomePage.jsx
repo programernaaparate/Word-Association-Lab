@@ -88,6 +88,7 @@ function HomePage() {
   )
   const [dailyChallenge, setDailyChallenge] = useState(null)
   const [dailyError, setDailyError] = useState('')
+  const [isDailyLoading, setIsDailyLoading] = useState(false)
   const [dailyDateKey, setDailyDateKey] = useState(() => getTodayKey())
   const hasContinuableSession = Boolean(activeSession?.type) && !isExpiredDailySession(activeSession)
   const hasSavedWordChainSession = activeSession?.type === 'word-chain'
@@ -101,6 +102,18 @@ function HomePage() {
     calculateLevelFromPoints(displayPoints)
   )
   const levelTheme = getLevelTheme(displayLevel)
+  const dailyStatusCopy = dailyChallenge?.isCompleted
+    ? 'Danasnji izazov je vec zatvoren sa 100%.'
+    : dailyChallenge?.content
+      ? `Daily je spreman za ${selectedDifficulty.toLowerCase()} / ${selectedCategory.toLowerCase()} izbor.`
+      : isDailyLoading
+        ? 'Dnevni izazov se upravo ucitava iz baze.'
+        : dailyError
+          ? 'Daily trenutno nije dostupan, ali ostali modovi rade normalno.'
+          : 'Cekamo da daily stigne sa servera.'
+  const sessionStatusCopy = hasContinuableSession
+    ? 'Imas sacuvanu sesiju koju mozes nastaviti bez gubitka progresa.'
+    : `Sljedeca nova runda krece sa ${selectedDifficulty.toLowerCase()} tezinom i kategorijom ${selectedCategory.toLowerCase()}.`
 
   const visibleCategories = useMemo(
     () =>
@@ -213,10 +226,12 @@ function HomePage() {
 
     const loadDailyChallenge = async () => {
       if (!token) {
+        setIsDailyLoading(false)
         return
       }
 
       try {
+        setIsDailyLoading(true)
         setDailyError('')
         const response = await getDailyChallengeRequest(token)
 
@@ -247,6 +262,10 @@ function HomePage() {
 
         setDailyChallenge(null)
         setDailyError(error.message)
+      } finally {
+        if (isMounted) {
+          setIsDailyLoading(false)
+        }
       }
     }
 
@@ -356,7 +375,7 @@ function HomePage() {
   }
 
   return (
-    <div className="screen">
+    <div className="screen app-screen">
       <div className="phone-card app-shell">
         <div className="home-topbar">
           <button
@@ -463,6 +482,26 @@ function HomePage() {
             </div>
           </section>
 
+          <section className="home-ready-card">
+            <div className="home-ready-copy">
+              <small>Tvoj naredni start</small>
+              <strong>{hasContinuableSession ? 'Sesija te vec ceka' : 'Sve je spremno za novu rundu'}</strong>
+              <p>{sessionStatusCopy}</p>
+            </div>
+
+            <div className="home-ready-tags">
+              <span className="tag blue-pill">{selectedDifficulty}</span>
+              <span className="tag neutral">{selectedCategory}</span>
+              {dailyChallenge?.content ? (
+                <span className="tag green-pill">
+                  {dailyChallenge?.isCompleted ? 'Daily zavrsen' : 'Daily spreman'}
+                </span>
+              ) : null}
+            </div>
+
+            <p className="home-ready-note">{dailyStatusCopy}</p>
+          </section>
+
           <button
             className="daily-card clickable-card"
             onClick={handleDailyGameStart}
@@ -476,15 +515,19 @@ function HomePage() {
                   ? 'Zavrseno'
                   : dailyChallenge?.reward
                     ? `+${dailyChallenge.reward} XP`
-                    : 'Ucitaj'}
+                    : isDailyLoading
+                      ? 'Ucitavam...'
+                      : 'Ucitaj'}
               </span>
             </div>
 
             <h2>{dailyChallenge?.title || 'Ucitaj dnevni izazov'}</h2>
             <p>
               {dailyChallenge?.description ||
-                dailyError ||
-                'Daily challenge ce se pojaviti cim backend vrati sadrzaj.'}
+                (isDailyLoading
+                  ? 'Ucitavam dnevni izazov iz baze...'
+                  : dailyError ||
+                    'Daily challenge ce se pojaviti cim backend vrati sadrzaj.')}
             </p>
 
             <div className="daily-percent">{dailyChallenge?.progress ?? 0}%</div>
@@ -493,7 +536,7 @@ function HomePage() {
           <section className="home-section">
             <div className="home-section-row">
               <h3 className="home-section-title">BRZE OPCIJE</h3>
-              <span className="home-section-note">Navigacija i pomoc</span>
+              <span className="home-section-note">Precice i pomoc</span>
             </div>
 
             <div className="home-mini-grid">
@@ -501,21 +544,34 @@ function HomePage() {
                 <div className="mini-icon soft-blue-box">
                   <AppIcon name="play" size={20} />
                 </div>
-                <span>{hasContinuableSession ? 'Nastavi sesiju' : 'Brzi start'}</span>
+                <div className="home-mini-copy">
+                  <strong>{hasContinuableSession ? 'Nastavi sesiju' : 'Brzi start'}</strong>
+                  <small>
+                    {hasContinuableSession
+                      ? 'Vrati se tacno tamo gdje si stao'
+                      : 'Odmah uskoči u novu rundu'}
+                  </small>
+                </div>
               </button>
 
               <button className="home-mini-card" onClick={() => navigate('/history')} type="button">
                 <div className="mini-icon soft-green-box">
                   <AppIcon name="chart" size={20} />
                 </div>
-                <span>Napredak</span>
+                <div className="home-mini-copy">
+                  <strong>Napredak</strong>
+                  <small>XP, istorija i tvoj ritam igre</small>
+                </div>
               </button>
 
               <button className="home-mini-card" onClick={() => navigate('/guide')} type="button">
                 <div className="mini-icon soft-blue-box">
                   <AppIcon name="guide" size={20} />
                 </div>
-                <span>Uputstvo</span>
+                <div className="home-mini-copy">
+                  <strong>Uputstvo</strong>
+                  <small>Pravila, modovi i kratki savjeti</small>
+                </div>
               </button>
 
               {user?.role === 'admin' ? (
@@ -527,7 +583,10 @@ function HomePage() {
                   <div className="mini-icon soft-green-box">
                     <AppIcon name="search" size={20} />
                   </div>
-                  <span>Baza sadrzaja</span>
+                  <div className="home-mini-copy">
+                    <strong>Baza sadrzaja</strong>
+                    <small>Admin pregled i uredjivanje sadrzaja</small>
+                  </div>
                 </button>
               ) : (
                 <button
@@ -538,7 +597,10 @@ function HomePage() {
                   <div className="mini-icon soft-blue-box">
                     <AppIcon name="user" size={20} />
                   </div>
-                  <span>Profil</span>
+                  <div className="home-mini-copy">
+                    <strong>Profil</strong>
+                    <small>Nalog, nivo i pregled napretka</small>
+                  </div>
                 </button>
               )}
             </div>
@@ -547,7 +609,7 @@ function HomePage() {
           <section className="home-section">
             <div className="home-section-row">
               <h3 className="home-section-title">IZABERI IGRU</h3>
-              <span className="home-section-note">Odavde pokreces modove</span>
+              <span className="home-section-note">Tvoj sledeci mod</span>
             </div>
 
             <button

@@ -56,9 +56,14 @@ const relation = (
   hint,
 })
 
-const chainPreset = (centerWord, starterNodes) => ({
+const chainPreset = (id, centerWord, starterNodes) => ({
+  id,
   centerWord,
-  starterNodes,
+  starterNodes: starterNodes.map(([word, relation], index) => ({
+    id: `${id}-${index + 1}`,
+    word,
+    relation,
+  })),
 })
 
 export const DEFAULT_ASSOCIATION_WORDS = [
@@ -181,124 +186,124 @@ export const DEFAULT_RELATION_CHALLENGES = [
 ]
 
 export const DEFAULT_WORD_CHAIN_PRESETS = {
-  'Nauka-Lako': chainPreset('Tacnost', [
-    { id: 'nauka-lako-1', word: 'Preciznost', relation: 'Sinonim' },
-    { id: 'nauka-lako-2', word: 'Greska', relation: 'Antonim' },
-    { id: 'nauka-lako-3', word: 'Eksperiment', relation: 'Asocijacija' },
-  ]),
-  'Nauka-Srednje': chainPreset('Svemir', [
-    { id: 'nauka-srednje-1', word: 'Kosmos', relation: 'Sinonim' },
-    { id: 'nauka-srednje-2', word: 'Zemlja', relation: 'Antonim' },
-    { id: 'nauka-srednje-3', word: 'Galaksija', relation: 'Asocijacija' },
-  ]),
-  'Nauka-Tesko': chainPreset('Gravitacija', [
-    { id: 'nauka-tesko-1', word: 'Privlacnost', relation: 'Sinonim' },
-    { id: 'nauka-tesko-2', word: 'Bestezinsko', relation: 'Antonim' },
-    { id: 'nauka-tesko-3', word: 'Masa', relation: 'Asocijacija' },
-  ]),
-  'Sport-Lako': chainPreset('Pobjeda', [
-    { id: 'sport-lako-1', word: 'Trijumf', relation: 'Sinonim' },
-    { id: 'sport-lako-2', word: 'Poraz', relation: 'Antonim' },
-    { id: 'sport-lako-3', word: 'Medalja', relation: 'Asocijacija' },
-  ]),
-  'Sport-Srednje': chainPreset('Trka', [
-    { id: 'sport-srednje-1', word: 'Nadmetanje', relation: 'Sinonim' },
-    { id: 'sport-srednje-2', word: 'Mirovanje', relation: 'Antonim' },
-    { id: 'sport-srednje-3', word: 'Maraton', relation: 'Asocijacija' },
-  ]),
-  'Sport-Tesko': chainPreset('Disciplina', [
-    { id: 'sport-tesko-1', word: 'Red', relation: 'Sinonim' },
-    { id: 'sport-tesko-2', word: 'Nered', relation: 'Antonim' },
-    { id: 'sport-tesko-3', word: 'Gimnastika', relation: 'Asocijacija' },
-  ]),
-  'Film-Lako': chainPreset('Scena', [
-    { id: 'film-lako-1', word: 'Prizor', relation: 'Sinonim' },
-    { id: 'film-lako-2', word: 'Pauza', relation: 'Antonim' },
-    { id: 'film-lako-3', word: 'Kamera', relation: 'Asocijacija' },
-  ]),
-  'Film-Srednje': chainPreset('Lik', [
-    { id: 'film-srednje-1', word: 'Junak', relation: 'Sinonim' },
-    { id: 'film-srednje-2', word: 'Publika', relation: 'Antonim' },
-    { id: 'film-srednje-3', word: 'Scenario', relation: 'Asocijacija' },
-  ]),
-  'Film-Tesko': chainPreset('Montaza', [
-    { id: 'film-tesko-1', word: 'Sklapanje', relation: 'Sinonim' },
-    { id: 'film-tesko-2', word: 'Rasipanje', relation: 'Antonim' },
-    { id: 'film-tesko-3', word: 'Rez', relation: 'Asocijacija' },
-  ]),
-  'Istorija-Lako': chainPreset('Kralj', [
-    { id: 'istorija-lako-1', word: 'Vladar', relation: 'Sinonim' },
-    { id: 'istorija-lako-2', word: 'Podanik', relation: 'Antonim' },
-    { id: 'istorija-lako-3', word: 'Kruna', relation: 'Asocijacija' },
-  ]),
-  'Istorija-Srednje': chainPreset('Drevno', [
-    { id: 'istorija-srednje-1', word: 'Staro', relation: 'Sinonim' },
-    { id: 'istorija-srednje-2', word: 'Savremeno', relation: 'Antonim' },
-    { id: 'istorija-srednje-3', word: 'Renesansa', relation: 'Asocijacija' },
-  ]),
-  'Istorija-Tesko': chainPreset('Sporazum', [
-    { id: 'istorija-tesko-1', word: 'Dogovor', relation: 'Sinonim' },
-    { id: 'istorija-tesko-2', word: 'Sukob', relation: 'Antonim' },
-    { id: 'istorija-tesko-3', word: 'Diplomatija', relation: 'Asocijacija' },
-  ]),
-  'Priroda-Lako': chainPreset('Toplota', [
-    { id: 'priroda-lako-1', word: 'Vrucina', relation: 'Sinonim' },
-    { id: 'priroda-lako-2', word: 'Hladnoca', relation: 'Antonim' },
-    { id: 'priroda-lako-3', word: 'Sunce', relation: 'Asocijacija' },
-  ]),
-  'Priroda-Srednje': chainPreset('Obala', [
-    { id: 'priroda-srednje-1', word: 'Primorje', relation: 'Sinonim' },
-    { id: 'priroda-srednje-2', word: 'Pucina', relation: 'Antonim' },
-    { id: 'priroda-srednje-3', word: 'More', relation: 'Asocijacija' },
-  ]),
-  'Priroda-Tesko': chainPreset('Erupcija', [
-    { id: 'priroda-tesko-1', word: 'Izlivanje', relation: 'Sinonim' },
-    { id: 'priroda-tesko-2', word: 'Mirovanje', relation: 'Antonim' },
-    { id: 'priroda-tesko-3', word: 'Vulkan', relation: 'Asocijacija' },
-  ]),
-  'Umjetnost-Lako': chainPreset('Muzika', [
-    { id: 'umjetnost-lako-1', word: 'Melodija', relation: 'Sinonim' },
-    { id: 'umjetnost-lako-2', word: 'Tisina', relation: 'Antonim' },
-    { id: 'umjetnost-lako-3', word: 'Simfonija', relation: 'Asocijacija' },
-  ]),
-  'Umjetnost-Srednje': chainPreset('Figura', [
-    { id: 'umjetnost-srednje-1', word: 'Oblik', relation: 'Sinonim' },
-    { id: 'umjetnost-srednje-2', word: 'Praznina', relation: 'Antonim' },
-    { id: 'umjetnost-srednje-3', word: 'Skulptura', relation: 'Asocijacija' },
-  ]),
-  'Umjetnost-Tesko': chainPreset('Dubina', [
-    { id: 'umjetnost-tesko-1', word: 'Prostornost', relation: 'Sinonim' },
-    { id: 'umjetnost-tesko-2', word: 'Plitkost', relation: 'Antonim' },
-    { id: 'umjetnost-tesko-3', word: 'Perspektiva', relation: 'Asocijacija' },
-  ]),
-  'Tehnologija-Lako': chainPreset('Program', [
-    { id: 'tehnologija-lako-1', word: 'Softver', relation: 'Sinonim' },
-    { id: 'tehnologija-lako-2', word: 'Kvar', relation: 'Antonim' },
-    { id: 'tehnologija-lako-3', word: 'Robot', relation: 'Asocijacija' },
-  ]),
-  'Tehnologija-Srednje': chainPreset('Logika', [
-    { id: 'tehnologija-srednje-1', word: 'Racunanje', relation: 'Sinonim' },
-    { id: 'tehnologija-srednje-2', word: 'Haos', relation: 'Antonim' },
-    { id: 'tehnologija-srednje-3', word: 'Algoritam', relation: 'Asocijacija' },
-  ]),
-  'Tehnologija-Tesko': chainPreset('Procesor', [
-    { id: 'tehnologija-tesko-1', word: 'Jezgro', relation: 'Sinonim' },
-    { id: 'tehnologija-tesko-2', word: 'Rucni rad', relation: 'Antonim' },
-    { id: 'tehnologija-tesko-3', word: 'Mikrocip', relation: 'Asocijacija' },
-  ]),
-  'Geografija-Lako': chainPreset('Karta', [
-    { id: 'geografija-lako-1', word: 'Mapa', relation: 'Sinonim' },
-    { id: 'geografija-lako-2', word: 'Nepoznat teren', relation: 'Antonim' },
-    { id: 'geografija-lako-3', word: 'Atlas', relation: 'Asocijacija' },
-  ]),
-  'Geografija-Srednje': chainPreset('Ostrvo', [
-    { id: 'geografija-srednje-1', word: 'Ada', relation: 'Sinonim' },
-    { id: 'geografija-srednje-2', word: 'Kopno', relation: 'Antonim' },
-    { id: 'geografija-srednje-3', word: 'Arhipelag', relation: 'Asocijacija' },
-  ]),
-  'Geografija-Tesko': chainPreset('Pravac', [
-    { id: 'geografija-tesko-1', word: 'Smjer', relation: 'Sinonim' },
-    { id: 'geografija-tesko-2', word: 'Lutanje', relation: 'Antonim' },
-    { id: 'geografija-tesko-3', word: 'Meridijan', relation: 'Asocijacija' },
-  ]),
+  'Nauka-Lako': [
+    chainPreset('nauka-lako-a', 'Tacnost', [['Preciznost', 'Sinonim'], ['Greska', 'Antonim'], ['Eksperiment', 'Asocijacija']]),
+    chainPreset('nauka-lako-b', 'Pouzdanost', [['Ispravnost', 'Sinonim'], ['Netacnost', 'Antonim'], ['Laboratorija', 'Asocijacija']]),
+    chainPreset('nauka-lako-c', 'Ispravnost', [['Pouzdanost', 'Sinonim'], ['Promasaj', 'Antonim'], ['Mjerenje', 'Asocijacija']]),
+  ],
+  'Nauka-Srednje': [
+    chainPreset('nauka-srednje-a', 'Svemir', [['Kosmos', 'Sinonim'], ['Zemlja', 'Antonim'], ['Galaksija', 'Asocijacija']]),
+    chainPreset('nauka-srednje-b', 'Kosmos', [['Univerzum', 'Sinonim'], ['Tlo', 'Antonim'], ['Orbita', 'Asocijacija']]),
+    chainPreset('nauka-srednje-c', 'Vasiona', [['Kosmos', 'Sinonim'], ['Podzemlje', 'Antonim'], ['Planeta', 'Asocijacija']]),
+  ],
+  'Nauka-Tesko': [
+    chainPreset('nauka-tesko-a', 'Gravitacija', [['Privlacnost', 'Sinonim'], ['Bestezinsko', 'Antonim'], ['Masa', 'Asocijacija']]),
+    chainPreset('nauka-tesko-b', 'Privlacenje', [['Privlacnost', 'Sinonim'], ['Odbijanje', 'Antonim'], ['Njutn', 'Asocijacija']]),
+    chainPreset('nauka-tesko-c', 'Teza', [['Privlacenje', 'Sinonim'], ['Lebdenje', 'Antonim'], ['Orbita', 'Asocijacija']]),
+  ],
+  'Sport-Lako': [
+    chainPreset('sport-lako-a', 'Pobjeda', [['Trijumf', 'Sinonim'], ['Poraz', 'Antonim'], ['Medalja', 'Asocijacija']]),
+    chainPreset('sport-lako-b', 'Trijumf', [['Uspjeh', 'Sinonim'], ['Gubitak', 'Antonim'], ['Trofej', 'Asocijacija']]),
+    chainPreset('sport-lako-c', 'Slavlje', [['Uspjeh', 'Sinonim'], ['Neuspjeh', 'Antonim'], ['Finale', 'Asocijacija']]),
+  ],
+  'Sport-Srednje': [
+    chainPreset('sport-srednje-a', 'Trka', [['Nadmetanje', 'Sinonim'], ['Mirovanje', 'Antonim'], ['Maraton', 'Asocijacija']]),
+    chainPreset('sport-srednje-b', 'Takmicenje', [['Utrka', 'Sinonim'], ['Zastoj', 'Antonim'], ['Start', 'Asocijacija']]),
+    chainPreset('sport-srednje-c', 'Nadmetanje', [['Takmicenje', 'Sinonim'], ['Pauza', 'Antonim'], ['Cilj', 'Asocijacija']]),
+  ],
+  'Sport-Tesko': [
+    chainPreset('sport-tesko-a', 'Disciplina', [['Red', 'Sinonim'], ['Nered', 'Antonim'], ['Gimnastika', 'Asocijacija']]),
+    chainPreset('sport-tesko-b', 'Samokontrola', [['Urednost', 'Sinonim'], ['Haos', 'Antonim'], ['Trening', 'Asocijacija']]),
+    chainPreset('sport-tesko-c', 'Urednost', [['Samokontrola', 'Sinonim'], ['Neposlusnost', 'Antonim'], ['Fokus', 'Asocijacija']]),
+  ],
+  'Film-Lako': [
+    chainPreset('film-lako-a', 'Junak', [['Lik', 'Sinonim'], ['Negativac', 'Antonim'], ['Scenario', 'Asocijacija']]),
+    chainPreset('film-lako-b', 'Protagonista', [['Heroj', 'Sinonim'], ['Zlikovac', 'Antonim'], ['Glumac', 'Asocijacija']]),
+    chainPreset('film-lako-c', 'Lik', [['Heroj', 'Sinonim'], ['Protivnik', 'Antonim'], ['Radnja', 'Asocijacija']]),
+  ],
+  'Film-Srednje': [
+    chainPreset('film-srednje-a', 'Dijalog', [['Razgovor', 'Sinonim'], ['Tisina', 'Antonim'], ['Glumac', 'Asocijacija']]),
+    chainPreset('film-srednje-b', 'Replika', [['Konverzacija', 'Sinonim'], ['Muk', 'Antonim'], ['Scenario', 'Asocijacija']]),
+    chainPreset('film-srednje-c', 'Konverzacija', [['Razgovor', 'Sinonim'], ['Cutanje', 'Antonim'], ['Scena', 'Asocijacija']]),
+  ],
+  'Film-Tesko': [
+    chainPreset('film-tesko-a', 'Montaza', [['Sklapanje', 'Sinonim'], ['Prekid', 'Antonim'], ['Rez', 'Asocijacija']]),
+    chainPreset('film-tesko-b', 'Obrada', [['Spajanje', 'Sinonim'], ['Rastavljanje', 'Antonim'], ['Postprodukcija', 'Asocijacija']]),
+    chainPreset('film-tesko-c', 'Rez', [['Obrada', 'Sinonim'], ['Raskid', 'Antonim'], ['Kadar', 'Asocijacija']]),
+  ],
+  'Istorija-Lako': [
+    chainPreset('istorija-lako-a', 'Kralj', [['Vladar', 'Sinonim'], ['Podanik', 'Antonim'], ['Kruna', 'Asocijacija']]),
+    chainPreset('istorija-lako-b', 'Monarh', [['Knez', 'Sinonim'], ['Sluga', 'Antonim'], ['Prijesto', 'Asocijacija']]),
+    chainPreset('istorija-lako-c', 'Vladar', [['Monarh', 'Sinonim'], ['Narod', 'Antonim'], ['Dvor', 'Asocijacija']]),
+  ],
+  'Istorija-Srednje': [
+    chainPreset('istorija-srednje-a', 'Drevno', [['Staro', 'Sinonim'], ['Savremeno', 'Antonim'], ['Renesansa', 'Asocijacija']]),
+    chainPreset('istorija-srednje-b', 'Proslost', [['Prastaro', 'Sinonim'], ['Novo', 'Antonim'], ['Antika', 'Asocijacija']]),
+    chainPreset('istorija-srednje-c', 'Prastaro', [['Davno', 'Sinonim'], ['Moderno', 'Antonim'], ['Civilizacija', 'Asocijacija']]),
+  ],
+  'Istorija-Tesko': [
+    chainPreset('istorija-tesko-a', 'Sporazum', [['Dogovor', 'Sinonim'], ['Sukob', 'Antonim'], ['Diplomatija', 'Asocijacija']]),
+    chainPreset('istorija-tesko-b', 'Savez', [['Nagodba', 'Sinonim'], ['Rat', 'Antonim'], ['Pregovori', 'Asocijacija']]),
+    chainPreset('istorija-tesko-c', 'Dogovor', [['Ugovor', 'Sinonim'], ['Raskid', 'Antonim'], ['Ambasada', 'Asocijacija']]),
+  ],
+  'Priroda-Lako': [
+    chainPreset('priroda-lako-a', 'Toplota', [['Vrucina', 'Sinonim'], ['Hladnoca', 'Antonim'], ['Sunce', 'Asocijacija']]),
+    chainPreset('priroda-lako-b', 'Vrelina', [['Zagrijanost', 'Sinonim'], ['Studen', 'Antonim'], ['Ljeto', 'Asocijacija']]),
+    chainPreset('priroda-lako-c', 'Vrucina', [['Toplota', 'Sinonim'], ['Led', 'Antonim'], ['Vatra', 'Asocijacija']]),
+  ],
+  'Priroda-Srednje': [
+    chainPreset('priroda-srednje-a', 'Vlaga', [['Vlaznost', 'Sinonim'], ['Susa', 'Antonim'], ['Kisa', 'Asocijacija']]),
+    chainPreset('priroda-srednje-b', 'Mokrota', [['Orosenost', 'Sinonim'], ['Suvoca', 'Antonim'], ['Rosa', 'Asocijacija']]),
+    chainPreset('priroda-srednje-c', 'Vlaznost', [['Mokrota', 'Sinonim'], ['Isusenost', 'Antonim'], ['Magla', 'Asocijacija']]),
+  ],
+  'Priroda-Tesko': [
+    chainPreset('priroda-tesko-a', 'Erupcija', [['Izlivanje', 'Sinonim'], ['Mirovanje', 'Antonim'], ['Vulkan', 'Asocijacija']]),
+    chainPreset('priroda-tesko-b', 'Eksplozija', [['Provala', 'Sinonim'], ['Tisina', 'Antonim'], ['Krater', 'Asocijacija']]),
+    chainPreset('priroda-tesko-c', 'Izlivanje', [['Eksplozija', 'Sinonim'], ['Zatisje', 'Antonim'], ['Lava', 'Asocijacija']]),
+  ],
+  'Umjetnost-Lako': [
+    chainPreset('umjetnost-lako-a', 'Muzika', [['Melodija', 'Sinonim'], ['Tisina', 'Antonim'], ['Simfonija', 'Asocijacija']]),
+    chainPreset('umjetnost-lako-b', 'Harmonija', [['Zvuk', 'Sinonim'], ['Muk', 'Antonim'], ['Orkestar', 'Asocijacija']]),
+    chainPreset('umjetnost-lako-c', 'Melodija', [['Harmonija', 'Sinonim'], ['Bezvucnost', 'Antonim'], ['Nota', 'Asocijacija']]),
+  ],
+  'Umjetnost-Srednje': [
+    chainPreset('umjetnost-srednje-a', 'Figura', [['Oblik', 'Sinonim'], ['Praznina', 'Antonim'], ['Skulptura', 'Asocijacija']]),
+    chainPreset('umjetnost-srednje-b', 'Silueta', [['Forma', 'Sinonim'], ['Bezoblicnost', 'Antonim'], ['Crtez', 'Asocijacija']]),
+    chainPreset('umjetnost-srednje-c', 'Oblik', [['Silueta', 'Sinonim'], ['Prazan prostor', 'Antonim'], ['Vajar', 'Asocijacija']]),
+  ],
+  'Umjetnost-Tesko': [
+    chainPreset('umjetnost-tesko-a', 'Dubina', [['Prostornost', 'Sinonim'], ['Plitkost', 'Antonim'], ['Perspektiva', 'Asocijacija']]),
+    chainPreset('umjetnost-tesko-b', 'Slojevitost', [['Udaljenost', 'Sinonim'], ['Ravnina', 'Antonim'], ['Linije', 'Asocijacija']]),
+    chainPreset('umjetnost-tesko-c', 'Prostornost', [['Slojevitost', 'Sinonim'], ['Spljostenost', 'Antonim'], ['Horizont', 'Asocijacija']]),
+  ],
+  'Tehnologija-Lako': [
+    chainPreset('tehnologija-lako-a', 'Program', [['Softver', 'Sinonim'], ['Kvar', 'Antonim'], ['Robot', 'Asocijacija']]),
+    chainPreset('tehnologija-lako-b', 'Sistem', [['Aplikacija', 'Sinonim'], ['Prekid', 'Antonim'], ['Kod', 'Asocijacija']]),
+    chainPreset('tehnologija-lako-c', 'Softver', [['Sistem', 'Sinonim'], ['Bag', 'Antonim'], ['Algoritam', 'Asocijacija']]),
+  ],
+  'Tehnologija-Srednje': [
+    chainPreset('tehnologija-srednje-a', 'Logika', [['Racunanje', 'Sinonim'], ['Haos', 'Antonim'], ['Algoritam', 'Asocijacija']]),
+    chainPreset('tehnologija-srednje-b', 'Analiza', [['Zakljucivanje', 'Sinonim'], ['Nelogicnost', 'Antonim'], ['Program', 'Asocijacija']]),
+    chainPreset('tehnologija-srednje-c', 'Zakljucivanje', [['Analiza', 'Sinonim'], ['Slucajnost', 'Antonim'], ['Koraci', 'Asocijacija']]),
+  ],
+  'Tehnologija-Tesko': [
+    chainPreset('tehnologija-tesko-a', 'Digitalno', [['Elektronski', 'Sinonim'], ['Analogno', 'Antonim'], ['Mikrocip', 'Asocijacija']]),
+    chainPreset('tehnologija-tesko-b', 'Racunarski', [['Digitalizovan', 'Sinonim'], ['Rucno', 'Antonim'], ['Procesor', 'Asocijacija']]),
+    chainPreset('tehnologija-tesko-c', 'Elektronski', [['Racunarski', 'Sinonim'], ['Mehanicki', 'Antonim'], ['Podaci', 'Asocijacija']]),
+  ],
+  'Geografija-Lako': [
+    chainPreset('geografija-lako-a', 'Sjever', [['Sever', 'Sinonim'], ['Jug', 'Antonim'], ['Kompas', 'Asocijacija']]),
+    chainPreset('geografija-lako-b', 'Sjeverno', [['Gore', 'Sinonim'], ['Juzno', 'Antonim'], ['Pol', 'Asocijacija']]),
+    chainPreset('geografija-lako-c', 'Sever', [['Sjeverno', 'Sinonim'], ['Dole', 'Antonim'], ['Orijentacija', 'Asocijacija']]),
+  ],
+  'Geografija-Srednje': [
+    chainPreset('geografija-srednje-a', 'Ostrvo', [['Ada', 'Sinonim'], ['Kopno', 'Antonim'], ['Arhipelag', 'Asocijacija']]),
+    chainPreset('geografija-srednje-b', 'Ostrvce', [['Otocic', 'Sinonim'], ['Kontinent', 'Antonim'], ['Obala', 'Asocijacija']]),
+    chainPreset('geografija-srednje-c', 'Ada', [['Ostrvce', 'Sinonim'], ['Poluostrvo', 'Antonim'], ['Luka', 'Asocijacija']]),
+  ],
+  'Geografija-Tesko': [
+    chainPreset('geografija-tesko-a', 'Pravac', [['Smjer', 'Sinonim'], ['Lutanje', 'Antonim'], ['Meridijan', 'Asocijacija']]),
+    chainPreset('geografija-tesko-b', 'Kurs', [['Orijentacija', 'Sinonim'], ['Skretanje', 'Antonim'], ['Kompas', 'Asocijacija']]),
+    chainPreset('geografija-tesko-c', 'Smjer', [['Kurs', 'Sinonim'], ['Dezorijentacija', 'Antonim'], ['Koordinate', 'Asocijacija']]),
+  ],
 }

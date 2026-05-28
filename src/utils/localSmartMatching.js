@@ -91,7 +91,21 @@ const RELATED_CONCEPT_GROUPS = [
   ['tehnologija', 'softver', 'software', 'program', 'algoritam', 'racunar', 'računar', 'kompjuter'],
   ['sport', 'fudbal', 'nogomet', 'rukomet', 'gimnastika', 'maraton', 'trka', 'štafeta', 'stafeta'],
   ['priroda', 'voda', 'more', 'rijeka', 'šuma', 'suma', 'sunce', 'vulkan', 'planina'],
+  ['toplota', 'toplina', 'vrucina', 'vrućina', 'vrelina', 'temperatura', 'sunce', 'ljeto', 'vatra', 'energija'],
   ['umjetnost', 'muzika', 'simfonija', 'pozoriste', 'pozorište', 'teatar', 'skulptura', 'perspektiva'],
+]
+
+const COMMON_ANSWER_PREFIXES = [
+  'to je',
+  'ovo je',
+  'odgovor je',
+  'tacan odgovor je',
+  'mislim da je',
+  'ja mislim da je',
+  'rekao bih da je',
+  'rekao bih',
+  'mozda je',
+  'pojam je',
 ]
 
 const normalizeBaseText = (value = '') =>
@@ -112,6 +126,24 @@ const toCollapsedCompactText = (value = '') =>
   toCompactText(collapseRepeatedCharacters(value))
 
 const tokenize = (value = '') => normalizeBaseText(value).split(' ').filter(Boolean)
+
+const stripAnswerFraming = (value = '') => {
+  const normalizedValue = normalizeBaseText(value)
+
+  if (!normalizedValue) {
+    return ''
+  }
+
+  const matchedPrefix = COMMON_ANSWER_PREFIXES.find(
+    (prefix) => normalizedValue === prefix || normalizedValue.startsWith(`${prefix} `)
+  )
+
+  if (!matchedPrefix) {
+    return normalizedValue
+  }
+
+  return normalizedValue.slice(matchedPrefix.length).trim()
+}
 
 const getLevenshteinDistance = (leftValue = '', rightValue = '') => {
   const left = String(leftValue || '')
@@ -230,6 +262,17 @@ const buildComparableVariants = (value = '') => {
   ].filter(Boolean)
 }
 
+const buildAnswerVariants = (value = '') => {
+  const strippedValue = stripAnswerFraming(value)
+
+  return [
+    ...new Set([
+      ...buildComparableVariants(value),
+      ...(strippedValue ? buildComparableVariants(strippedValue) : []),
+    ]),
+  ]
+}
+
 const getExpandedAlternatives = (values = []) => {
   const alternatives = new Set()
 
@@ -275,7 +318,7 @@ const findVariantMatch = (actualVariants = [], expectedVariants = []) => {
 }
 
 export const evaluateSmartConceptAnswer = (challenge = {}, actualAnswer = '') => {
-  const actualVariants = buildComparableVariants(actualAnswer)
+  const actualVariants = buildAnswerVariants(actualAnswer)
 
   if (!actualVariants.length) {
     return { accepted: false, partialAccepted: false, matchedAnswer: null, scoreWeight: 0 }
@@ -343,11 +386,76 @@ export const evaluateSmartConceptAnswer = (challenge = {}, actualAnswer = '') =>
   }
 }
 
+export const evaluateSmartAssociationAnswer = (wordItem = {}, actualAnswer = '') => {
+  const actualVariants = buildAnswerVariants(actualAnswer)
+
+  if (!actualVariants.length) {
+    return { accepted: false, matchedAnswer: null, partialAccepted: false }
+  }
+
+  const acceptedCandidates = [
+    wordItem?.word || '',
+    ...(wordItem?.acceptedAnswers || []),
+  ].filter(Boolean)
+
+  const expandedExpectedVariants = getExpandedAlternatives(acceptedCandidates)
+  const directMatch = findVariantMatch(actualVariants, expandedExpectedVariants)
+
+  if (directMatch) {
+    return {
+      accepted: true,
+      partialAccepted: false,
+      matchedAnswer: directMatch,
+    }
+  }
+
+  const normalizedActual = stripAnswerFraming(actualAnswer)
+  const actualTokens = tokenize(normalizedActual)
+  const actualTokenSet = new Set(actualTokens)
+  const acceptedPhraseMatch = acceptedCandidates.find((candidate) => {
+    const candidateTokens = tokenize(candidate)
+
+    if (!candidateTokens.length || candidateTokens.length !== actualTokens.length) {
+      return false
+    }
+
+    return candidateTokens.every((token) => actualTokenSet.has(token))
+  })
+
+  if (acceptedPhraseMatch) {
+    return {
+      accepted: true,
+      partialAccepted: false,
+      matchedAnswer: normalizeBaseText(acceptedPhraseMatch),
+    }
+  }
+
+  const directCandidateMatch = acceptedCandidates.find((candidate) => {
+    const normalizedCandidate = normalizeBaseText(candidate)
+
+    if (!normalizedCandidate || normalizedCandidate.length < 5 || normalizedActual.length < 5) {
+      return false
+    }
+
+    return (
+      normalizedCandidate.includes(normalizedActual) ||
+      normalizedActual.includes(normalizedCandidate)
+    )
+  })
+
+  return {
+    accepted: Boolean(directCandidateMatch),
+    partialAccepted: false,
+    matchedAnswer: directCandidateMatch ? normalizeBaseText(directCandidateMatch) : null,
+  }
+}
+
 export const evaluateSmartWordChainCandidate = ({
   candidateWord = '',
   allowedWords = [],
+  relation = '',
 } = {}) => {
-  const actualVariants = buildComparableVariants(candidateWord)
+  const actualVariants = buildAnswerVariants(candidateWord)
 
   if (!actualVariants.length) {
     return { accepted: false, matchedWord: null }
@@ -379,6 +487,20 @@ export const evaluateSmartWordChainCandidate = ({
         accepted: true,
         matchedWord: allowedWord,
         reason: `Prepoznato kao razumna varijacija za "${allowedWord}".`,
+      }
+    }
+  }
+
+  if (relation === 'Asocijacija') {
+    const actualRelatedConcepts = new Set(getRelatedConcepts([candidateWord]))
+    const allowedRelatedConcepts = getRelatedConcepts(allowedWords)
+    const relatedMatch = allowedRelatedConcepts.find((item) => actualRelatedConcepts.has(item))
+
+    if (relatedMatch) {
+      return {
+        accepted: true,
+        matchedWord: relatedMatch,
+        reason: 'Prepoznata je prirodna asocijativna veza za ovu rundu.',
       }
     }
   }

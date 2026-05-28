@@ -1,11 +1,13 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import FirstRunTipCard from '../components/FirstRunTipCard'
 import Navbar from '../components/Navbar'
 import { getAssociationContentRequest } from '../utils/api'
 import { syncCompletedGame } from '../utils/gameSync'
 import {
   calculateAssociationReward,
   calculatePerformanceBonus,
+  resolveComboProgress,
 } from '../utils/gameRewards'
 import {
   clearActiveSession,
@@ -15,11 +17,20 @@ import {
   getCategory,
   getCurrentUser,
   getDifficulty,
+  getNewUnlockedAchievements,
+  getPlayerProgressOverview,
   getRotatedSessionItemIds,
+  getSessionRoundSize,
   isExpiredDailySession,
   saveActiveSession,
   saveLastResult,
 } from '../utils/storage'
+import {
+  playCelebrateSound,
+  playErrorSound,
+  playHintSound,
+  playSuccessSound,
+} from '../utils/uiFeedback'
 
 const BASE_SCORE = 1200
 const HINT_PENALTY = 5
@@ -61,6 +72,33 @@ const remapSessionWordsToPool = (sessionWords = [], poolWords = []) =>
     )
     .filter(Boolean)
 
+const pickAssociationSessionWords = ({
+  words = [],
+  difficulty,
+  category,
+  count = getSessionRoundSize({
+    availableCount: words.length,
+    preferredCount: 5,
+    minimumCount: 3,
+  }),
+  commit = true,
+}) => {
+  const selectedIds = getRotatedSessionItemIds({
+    gameType: 'association',
+    difficulty,
+    category,
+    items: words,
+    count: Math.min(count, words.length),
+    commit,
+  })
+
+  const selectedWords = selectedIds
+    .map((itemId) => words.find((item) => item.id === itemId))
+    .filter(Boolean)
+
+  return selectedWords.length ? selectedWords : words.slice(0, count)
+}
+
 function AssociationGamePage() {
   const navigate = useNavigate()
   const activeSession = getActiveSession()
@@ -90,6 +128,7 @@ function AssociationGamePage() {
     activeSession?.isDaily === true &&
     activeSession?.type === 'association' &&
     Boolean(dailyContent)
+  const hasRestoredSession = activeSession?.type === 'association' && !isDailyMode
   const hasExpiredDailySession = isExpiredDailySession(activeSession)
 
   const fallbackWords = useMemo(
@@ -114,19 +153,17 @@ function AssociationGamePage() {
       return mappedSavedWords
     }
 
-    const initialWordIds = getRotatedSessionItemIds({
-      gameType: 'association',
-      difficulty,
-      category,
-      items: fallbackWords,
-      count: Math.min(5, fallbackWords.length),
-    })
-
-    const initialWords = initialWordIds
-      .map((itemId) => fallbackWords.find((item) => item.id === itemId))
-      .filter(Boolean)
-
-    return initialWords.length ? initialWords : fallbackWords.slice(0, 5)
+      return pickAssociationSessionWords({
+        words: fallbackWords,
+        difficulty,
+        category,
+        count: getSessionRoundSize({
+          availableCount: fallbackWords.length,
+          preferredCount: 5,
+          minimumCount: 3,
+        }),
+        commit: false,
+      })
   })
   const resolvedDailyContent = useMemo(() => {
     if (!dailyContent) {
@@ -153,7 +190,18 @@ function AssociationGamePage() {
       return [resolvedDailyContent].filter(Boolean)
     }
 
-    return (sessionWords.length ? sessionWords : words.slice(0, 5)).filter(Boolean)
+    return (
+      sessionWords.length
+        ? sessionWords
+        : words.slice(
+            0,
+            getSessionRoundSize({
+              availableCount: words.length,
+              preferredCount: 5,
+              minimumCount: 3,
+            })
+          )
+    ).filter(Boolean)
   }, [isDailyMode, resolvedDailyContent, sessionWords, words])
 
   useEffect(() => {
@@ -168,15 +216,43 @@ function AssociationGamePage() {
         const nextWords =
           response.items?.length ? mergeWordPools(response.items, fallbackWords) : fallbackWords
         setWords(nextWords)
-        setSessionWords((prev) =>
-          prev.length ? remapSessionWordsToPool(prev, nextWords) : prev
-        )
+        setSessionWords((prev) => {
+          if (hasRestoredSession) {
+            return prev.length ? remapSessionWordsToPool(prev, nextWords) : prev
+          }
+
+          return pickAssociationSessionWords({
+            words: nextWords,
+            difficulty,
+            category,
+            count: getSessionRoundSize({
+              availableCount: nextWords.length,
+              preferredCount: 5,
+              minimumCount: 3,
+            }),
+            commit: true,
+          })
+        })
       } catch {
         if (!isMounted) return
         setWords(fallbackWords)
-        setSessionWords((prev) =>
-          prev.length ? remapSessionWordsToPool(prev, fallbackWords) : prev
-        )
+        setSessionWords((prev) => {
+          if (hasRestoredSession) {
+            return prev.length ? remapSessionWordsToPool(prev, fallbackWords) : prev
+          }
+
+          return pickAssociationSessionWords({
+            words: fallbackWords,
+            difficulty,
+            category,
+            count: getSessionRoundSize({
+              availableCount: fallbackWords.length,
+              preferredCount: 5,
+              minimumCount: 3,
+            }),
+            commit: true,
+          })
+        })
       }
     }
 
@@ -185,7 +261,7 @@ function AssociationGamePage() {
     return () => {
       isMounted = false
     }
-  }, [category, difficulty, fallbackWords, isDailyMode])
+  }, [category, difficulty, fallbackWords, hasRestoredSession, isDailyMode])
 
   const [index, setIndex] = useState(
     activeSession?.type === 'association' ? activeSession.index || 0 : 0
@@ -208,6 +284,15 @@ function AssociationGamePage() {
   )
   const [answers, setAnswers] = useState(
     activeSession?.type === 'association' ? activeSession.answers || [] : []
+  )
+  const [comboStreak, setComboStreak] = useState(
+    activeSession?.type === 'association' ? activeSession.comboStreak || 0 : 0
+  )
+  const [bestCombo, setBestCombo] = useState(
+    activeSession?.type === 'association' ? activeSession.bestCombo || 0 : 0
+  )
+  const [comboBonusTotal, setComboBonusTotal] = useState(
+    activeSession?.type === 'association' ? activeSession.comboBonusTotal || 0 : 0
   )
   const [hintUsedSteps, setHintUsedSteps] = useState(
     activeSession?.type === 'association' ? activeSession.hintUsedSteps || [] : []
@@ -235,6 +320,7 @@ function AssociationGamePage() {
   const currentPromptLabel = [currentWord?.symbol, ...currentClues.slice(0, revealedCount)]
     .filter(Boolean)
     .join(', ')
+  const canSubmit = Boolean(answer.trim())
 
   useEffect(() => {
     if (hasExpiredDailySession) {
@@ -267,6 +353,9 @@ function AssociationGamePage() {
       correct,
       showHint,
       answers,
+      comboStreak,
+      bestCombo,
+      comboBonusTotal,
       startedAt,
       isDaily: isDailyMode,
       dailyChallengeId: isDailyMode ? dailyChallengeId : null,
@@ -287,7 +376,10 @@ function AssociationGamePage() {
   }, [
     answer,
     answers,
+    bestCombo,
     category,
+    comboBonusTotal,
+    comboStreak,
     correct,
     dailyChallengeId,
     resolvedDailyContent,
@@ -317,6 +409,7 @@ function AssociationGamePage() {
       return
     }
 
+    playHintSound()
     setScore((prev) => Math.max(0, prev - HINT_PENALTY))
     setHintUsedSteps((prev) => [...prev, index])
     setShowHint(true)
@@ -325,6 +418,7 @@ function AssociationGamePage() {
   const handleRevealClue = () => {
     if (!canRevealMore) return
 
+    playHintSound()
     setScore((prev) => Math.max(0, prev - REVEAL_PENALTY))
     setRevealedClues((prev) => ({
       ...prev,
@@ -332,28 +426,48 @@ function AssociationGamePage() {
     }))
   }
 
-  const handleNext = async () => {
+  const handleNext = async ({ skip = false } = {}) => {
     if (!currentWord) return
 
-    const trimmedAnswer = answer.trim()
+    const trimmedAnswer = skip ? '' : answer.trim()
     const evaluation = evaluateAssociationAnswer(currentWord, trimmedAnswer)
 
     let updatedScore = score
     let updatedCorrect = correct
+    let updatedComboStreak = comboStreak
+    let updatedBestCombo = bestCombo
+    let updatedComboBonusTotal = comboBonusTotal
+    let awardedComboBonus = 0
 
     if (evaluation.accepted) {
+      const comboState = resolveComboProgress({
+        currentCombo: comboStreak,
+        bestCombo,
+        comboBonusTotal,
+        difficulty: currentWord.difficulty || difficulty,
+        accepted: true,
+        hintUsed: hintAlreadyUsedForCurrentStep,
+      })
+
+      updatedComboStreak = comboState.comboStreak
+      updatedBestCombo = comboState.bestCombo
+      updatedComboBonusTotal = comboState.comboBonusTotal
+      awardedComboBonus = comboState.awardedComboBonus
       updatedScore += calculateAssociationReward({
         difficulty: currentWord.difficulty || difficulty,
         totalClues: currentClues.length,
         revealedCount,
         hintUsed: hintAlreadyUsedForCurrentStep,
       })
+      updatedScore += awardedComboBonus
       updatedCorrect += 1
     } else if (trimmedAnswer) {
       updatedScore = Math.max(0, updatedScore - WRONG_ANSWER_PENALTY)
       setScore(updatedScore)
       setWrongAttempts((prev) => prev + 1)
+      setComboStreak(0)
       setRoundFeedback(`Netacno: "${trimmedAnswer}". Pokusaj ponovo.`)
+      playErrorSound()
       return
     }
 
@@ -369,15 +483,23 @@ function AssociationGamePage() {
         revealedCount,
         totalClues: currentClues.length,
         roundDifficulty: currentWord.difficulty || difficulty,
+        comboAfterRound: updatedComboStreak,
+        comboBonusAwarded: awardedComboBonus,
       },
     ]
 
     setScore(updatedScore)
     setCorrect(updatedCorrect)
     setAnswers(updatedAnswers)
+    setComboStreak(updatedComboStreak)
+    setBestCombo(updatedBestCombo)
+    setComboBonusTotal(updatedComboBonusTotal)
     setRoundFeedback('')
 
     if (index < gameWords.length - 1) {
+      if (evaluation.accepted) {
+        playSuccessSound()
+      }
       const nextIndex = index + 1
       setIndex(nextIndex)
       setAnswer('')
@@ -393,6 +515,7 @@ function AssociationGamePage() {
     const seconds = Math.max(1, Math.floor(elapsedMs / 1000))
     const accuracy = Math.round((updatedCorrect / gameWords.length) * 100)
     const currentUser = getCurrentUser()
+    const previousProgress = getPlayerProgressOverview()
     const performanceBonus = calculatePerformanceBonus({
       difficulty: currentWord.difficulty || difficulty,
       total: gameWords.length,
@@ -416,6 +539,8 @@ function AssociationGamePage() {
       roundScore: finalScore,
       performanceBonus,
       dailyReward: fallbackDailyReward,
+      comboBonus: updatedComboBonusTotal,
+      maxCombo: updatedBestCombo,
       total: gameWords.length,
       correct: updatedCorrect,
       accuracy,
@@ -447,6 +572,8 @@ function AssociationGamePage() {
 
     const syncResult = await syncCompletedGame({ historyEntry, submission })
     const finalHistoryEntry = syncResult.historyEntry
+    const progressSnapshot = getPlayerProgressOverview()
+    const newAchievements = getNewUnlockedAchievements(previousProgress, progressSnapshot)
 
     saveLastResult({
       type: 'association',
@@ -463,16 +590,21 @@ function AssociationGamePage() {
       isDaily: finalHistoryEntry.isDaily,
       hintCount,
       wrongAttempts,
+      comboBonus: finalHistoryEntry.comboBonus ?? updatedComboBonusTotal,
+      maxCombo: finalHistoryEntry.maxCombo ?? updatedBestCombo,
+      progressSnapshot,
+      newAchievements,
       dailyReward: finalHistoryEntry.dailyReward || 0,
-      awardedPoints: finalHistoryEntry.awardedPoints || earnedPoints,
+      awardedPoints: finalHistoryEntry.awardedPoints ?? earnedPoints + fallbackDailyReward,
     })
 
+    playCelebrateSound()
     clearActiveSession()
     navigate('/results')
   }
 
   return (
-    <div className="screen">
+    <div className="screen app-screen">
       <div className="phone-card app-shell">
         <Navbar
           title={`Igra asocijacija - ${displayScore} XP`}
@@ -486,6 +618,18 @@ function AssociationGamePage() {
             <span className="tag neutral">{currentWord?.difficulty || difficulty}</span>
             {isDailyMode && <span className="tag green-pill">Dnevni izazov</span>}
           </div>
+
+          <FirstRunTipCard
+            storageKey="association"
+            eyebrow="Prvi ulazak"
+            title="Otvaraj tragove samo kad moras"
+            description="Najvise XP uzimas kad pogodis sa sto manje otvorenih tragova i bez pomoci."
+            items={[
+              'Prvo probaj bez pomoci, pa tek onda otvori novi trag.',
+              'Hint i reveal cuvaj za zadnje 1-2 dileme.',
+            ]}
+            tone="green"
+          />
 
           <div className="section-row">
             <h2 className="logic-title">Pogodi konacno rjesenje</h2>
@@ -515,6 +659,9 @@ function AssociationGamePage() {
           <div className="profile-info-box">
             <p><strong>Otkriveno tragova:</strong> {revealedCount} / {currentClues.length}</p>
             <p><strong>Bodovanje:</strong> manje otvorenih tragova donosi vise poena.</p>
+            <p><strong>Aktivni combo:</strong> {comboStreak > 0 ? `x${comboStreak}` : 'Nema'}</p>
+            <p><strong>Najbolji combo:</strong> x{bestCombo}</p>
+            <p><strong>Combo bonus:</strong> +{comboBonusTotal} XP</p>
           </div>
 
           <label htmlFor="association-answer">Konacno rjesenje</label>
@@ -556,8 +703,21 @@ function AssociationGamePage() {
             </button>
           </div>
 
-          <button className="primary-btn full-btn" onClick={handleNext} type="button">
+          <button
+            className="primary-btn full-btn"
+            onClick={() => handleNext()}
+            type="button"
+            disabled={!canSubmit}
+          >
             {index === gameWords.length - 1 ? 'Zavrsi rundu' : 'Potvrdi odgovor'}
+          </button>
+
+          <button
+            className="secondary-btn full-btn"
+            onClick={() => handleNext({ skip: true })}
+            type="button"
+          >
+            {index === gameWords.length - 1 ? 'Ne znam, zavrsi rundu' : 'Ne znam, preskoci'}
           </button>
 
           <div className="progress-wrap">

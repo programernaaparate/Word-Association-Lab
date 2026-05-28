@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import FirstRunTipCard from '../components/FirstRunTipCard'
 import GameHelpModal from '../components/GameHelpModal'
 import Navbar from '../components/Navbar'
 import { evaluateAiWordChainNodeRequest } from '../utils/api'
@@ -16,10 +17,17 @@ import {
   getCategory,
   getCurrentUser,
   getDifficulty,
+  getNewUnlockedAchievements,
+  getPlayerProgressOverview,
   getWordChainPreset,
   saveActiveSession,
   saveLastResult,
 } from '../utils/storage'
+import {
+  playCelebrateSound,
+  playErrorSound,
+  playSuccessSound,
+} from '../utils/uiFeedback'
 
 const RELATION_OPTIONS = ['Sinonim', 'Antonim', 'Asocijacija']
 
@@ -61,18 +69,18 @@ const CHAIN_ALLOWED_NODES = {
     ['Trening', 'Pravilo', 'Gimnastika', 'Fokus']
   ),
   'Film-Lako': buildAllowedNodes(
-    ['Prizor', 'Sekvenca', 'Kadar'],
-    ['Pauza', 'Mrak', 'Praznina'],
-    ['Kamera', 'Glumac', 'Dijalog', 'Set']
+    ['Lik', 'Heroj', 'Protagonista'],
+    ['Negativac', 'Zlikovac', 'Protivnik'],
+    ['Scenario', 'Glumac', 'Radnja', 'Film']
   ),
   'Film-Srednje': buildAllowedNodes(
-    ['Karakter', 'Junak', 'Persona'],
-    ['Publika', 'Statista', 'Kulisa', 'Pozadina'],
-    ['Scenario', 'Glumac', 'Zaplet', 'Dijalog']
+    ['Razgovor', 'Replika', 'Konverzacija'],
+    ['Tisina', 'Muk', 'Cutanje'],
+    ['Glumac', 'Scenario', 'Scena', 'Film']
   ),
   'Film-Tesko': buildAllowedNodes(
     ['Sklapanje', 'Spajanje', 'Obrada'],
-    ['Rasipanje', 'Raskidanje', 'Haos'],
+    ['Prekid', 'Rastavljanje', 'Raskid'],
     ['Rez', 'Postprodukcija', 'Kadar', 'Ritam']
   ),
   'Istorija-Lako': buildAllowedNodes(
@@ -96,9 +104,9 @@ const CHAIN_ALLOWED_NODES = {
     ['Sunce', 'Ljeto', 'Vatra', 'Energija']
   ),
   'Priroda-Srednje': buildAllowedNodes(
-    ['Primorje', 'Zal', 'Obalni pojas'],
-    ['Pucina', 'Dubina', 'Otvoreno more'],
-    ['More', 'Pijesak', 'Luka', 'Talas']
+    ['Vlaznost', 'Mokrota', 'Orosenost'],
+    ['Susa', 'Suvoca', 'Isusenost'],
+    ['Kisa', 'Rosa', 'Oblak', 'Magla']
   ),
   'Priroda-Tesko': buildAllowedNodes(
     ['Izlivanje', 'Eksplozija', 'Provala'],
@@ -131,14 +139,14 @@ const CHAIN_ALLOWED_NODES = {
     ['Algoritam', 'Program', 'Odluka', 'Koraci']
   ),
   'Tehnologija-Tesko': buildAllowedNodes(
-    ['Jezgro', 'Centralna jedinica', 'Cvoriste'],
-    ['Kvar', 'Rucni rad', 'Analogno'],
-    ['Mikrocip', 'Racunar', 'Takt', 'Ploca']
+    ['Elektronski', 'Racunarski', 'Digitalizovan'],
+    ['Analogno', 'Rucno', 'Mehanicki'],
+    ['Mikrocip', 'Racunar', 'Podaci', 'Procesor']
   ),
   'Geografija-Lako': buildAllowedNodes(
-    ['Mapa', 'Plan', 'Prikaz'],
-    ['Nepoznat teren', 'Dezorijentacija', 'Magla'],
-    ['Atlas', 'Kompas', 'Ruta', 'Kontinent']
+    ['Sever', 'Sjeverno', 'Gore'],
+    ['Jug', 'Juzno', 'Dole'],
+    ['Kompas', 'Pol', 'Orijentacija', 'Mapa']
   ),
   'Geografija-Srednje': buildAllowedNodes(
     ['Ada', 'Otocic', 'Ostrvce'],
@@ -164,6 +172,8 @@ const normalizeWord = (value = '') =>
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .trim()
+
+const cloneChainNodes = (nodes = []) => (nodes || []).map((node) => ({ ...node }))
 
 const buildAllowedNodeIndex = (allowedNodes = {}) =>
   RELATION_OPTIONS.reduce(
@@ -276,9 +286,27 @@ function WordChainPage() {
   const category = isSavedWordChainSession
     ? activeSession.sessionCategory || activeSession.category || selectedCategory
     : selectedCategory
-  const chainPreset = getWordChainPreset(difficulty, category)
+  const chainPreset = useMemo(
+    () =>
+      getWordChainPreset(difficulty, category, {
+        commit: !isSavedWordChainSession,
+        presetId: isSavedWordChainSession ? activeSession?.presetId || null : null,
+      }),
+    [activeSession?.presetId, category, difficulty, isSavedWordChainSession]
+  )
   const presetKey = category === 'Sve' ? `Priroda-${difficulty}` : `${category}-${difficulty}`
   const allowedNodes = CHAIN_ALLOWED_NODES[presetKey] || CHAIN_ALLOWED_NODES['Priroda-Srednje']
+  const starterNodesTemplate = useMemo(() => {
+    if (
+      isSavedWordChainSession &&
+      Array.isArray(activeSession?.presetStarterNodes) &&
+      activeSession.presetStarterNodes.length > 0
+    ) {
+      return cloneChainNodes(activeSession.presetStarterNodes)
+    }
+
+    return cloneChainNodes(chainPreset.starterNodes)
+  }, [activeSession?.presetStarterNodes, chainPreset.starterNodes, isSavedWordChainSession])
 
   const [centerWord] = useState(
     isSavedWordChainSession
@@ -286,7 +314,9 @@ function WordChainPage() {
       : chainPreset.centerWord
   )
   const [nodes, setNodes] = useState(
-    isSavedWordChainSession ? activeSession.nodes || chainPreset.starterNodes : chainPreset.starterNodes
+    isSavedWordChainSession
+      ? cloneChainNodes(activeSession.nodes || starterNodesTemplate)
+      : cloneChainNodes(starterNodesTemplate)
   )
   const [newWord, setNewWord] = useState(
     isSavedWordChainSession ? activeSession.newWord || '' : ''
@@ -334,6 +364,8 @@ function WordChainPage() {
   useEffect(() => {
     saveActiveSession({
       type: 'word-chain',
+      presetId: chainPreset.id,
+      presetStarterNodes: starterNodesTemplate,
       centerWord,
       nodes,
       newWord,
@@ -342,7 +374,17 @@ function WordChainPage() {
       sessionDifficulty: difficulty,
       startedAt,
     })
-  }, [category, centerWord, difficulty, newWord, nodes, relation, startedAt])
+  }, [
+    category,
+    centerWord,
+    chainPreset.id,
+    difficulty,
+    newWord,
+    nodes,
+    relation,
+    startedAt,
+    starterNodesTemplate,
+  ])
 
   const handleAddNode = async () => {
     const trimmedWord = newWord.trim()
@@ -350,16 +392,19 @@ function WordChainPage() {
 
     if (!trimmedWord) {
       setChainMessage('Unesi rijec prije nego sto je dodas u lanac.')
+      playErrorSound()
       return
     }
 
     if (normalizedWord === normalizeWord(centerWord)) {
       setChainMessage('Nova rijec ne moze biti ista kao centralni pojam.')
+      playErrorSound()
       return
     }
 
     if (nodes.some((item) => normalizeWord(item.word) === normalizedWord)) {
       setChainMessage('Ta rijec je vec dodata u lanac.')
+      playErrorSound()
       return
     }
 
@@ -368,6 +413,7 @@ function WordChainPage() {
     const localSmartMatch = evaluateSmartWordChainCandidate({
       candidateWord: trimmedWord,
       allowedWords: allowedNodes[relation] || [],
+      relation,
     })
 
     if (
@@ -394,6 +440,7 @@ function WordChainPage() {
                 localSmartMatch.reason ||
                 `Ta rijec nije prepoznata kao dobra ${relation.toLowerCase()} veza za "${centerWord}".`
             )
+            playErrorSound()
             return
           }
         } catch {
@@ -401,6 +448,7 @@ function WordChainPage() {
             localSmartMatch.reason ||
               `Ta rijec nije prepoznata kao dobra ${relation.toLowerCase()} veza za "${centerWord}".`
           )
+          playErrorSound()
           return
         }
       } else {
@@ -408,6 +456,7 @@ function WordChainPage() {
           localSmartMatch.reason ||
             `Ta rijec nije prepoznata kao dobra ${relation.toLowerCase()} veza za "${centerWord}".`
         )
+        playErrorSound()
         return
       }
     }
@@ -424,6 +473,7 @@ function WordChainPage() {
     setNewWord('')
     setRelation('Asocijacija')
     setChainMessage('')
+    playSuccessSound()
   }
 
   const handleRemoveNode = (id) => {
@@ -432,18 +482,20 @@ function WordChainPage() {
   }
 
   const handleClearChain = () => {
-    setNodes(chainPreset.starterNodes)
+    setNodes(cloneChainNodes(starterNodesTemplate))
     setChainMessage('')
   }
 
   const handleFinish = async () => {
     if (!nodes.length) {
       setChainMessage('Dodaj makar jednu rijec prije zavrsetka lanca.')
+      playErrorSound()
       return
     }
 
     if (!canFinishChain) {
       setChainMessage(`Lanac jos nije spreman: ${chainEvaluation.missingGoals.join(' ')}`)
+      playErrorSound()
       return
     }
 
@@ -458,6 +510,7 @@ function WordChainPage() {
     const elapsedMs = new Date().getTime() - new Date(startedAt).getTime()
     const seconds = Math.max(1, Math.floor(elapsedMs / 1000))
     const currentUser = getCurrentUser()
+    const previousProgress = getPlayerProgressOverview()
     const performanceBonus = calculatePerformanceBonus({
       difficulty,
       total: Math.max(nodes.length, 4),
@@ -513,6 +566,8 @@ function WordChainPage() {
 
     const syncResult = await syncCompletedGame({ historyEntry, submission })
     const finalHistoryEntry = syncResult.historyEntry
+    const progressSnapshot = getPlayerProgressOverview()
+    const newAchievements = getNewUnlockedAchievements(previousProgress, progressSnapshot)
 
     saveLastResult({
       ...result,
@@ -523,16 +578,19 @@ function WordChainPage() {
       correct: finalHistoryEntry.correct ?? result.correct,
       accuracy: finalHistoryEntry.accuracy ?? result.accuracy,
       time: finalHistoryEntry.time ?? result.time,
+      progressSnapshot,
+      newAchievements,
       dailyReward: finalHistoryEntry.dailyReward || 0,
-      awardedPoints: finalHistoryEntry.awardedPoints || result.earnedPoints,
+      awardedPoints: finalHistoryEntry.awardedPoints ?? result.earnedPoints,
     })
 
+    playCelebrateSound()
     clearActiveSession()
     navigate('/results')
   }
 
   return (
-    <div className="screen">
+    <div className="screen app-screen">
       <div className="phone-card app-shell">
         <Navbar
           title="Lanac rijeci"
@@ -546,6 +604,18 @@ function WordChainPage() {
             <span className="tag purple-light">{category}</span>
             <span className="tag neutral">{difficulty}</span>
           </div>
+
+          <FirstRunTipCard
+            storageKey="word-chain"
+            eyebrow="Brzi onboarding"
+            title="Mijesaj sva 3 tipa veze"
+            description="Najjaci lanac nije samo dug, nego i izbalansiran: barem jedan sinonim, jedan antonim i jedna asocijacija."
+            items={[
+              'Ne trosi cvorove na slicne duplikate iste ideje.',
+              'Ako ti fali samo jedna vrsta veze, prvo zatvori tu rupu pa tek onda siri mrezu.',
+            ]}
+            tone="green"
+          />
 
           <div className="chain-stats-row">
             <div className="chain-stat-box">
@@ -674,7 +744,12 @@ function WordChainPage() {
               Ocisti lanac
             </button>
 
-            <button className="primary-btn" onClick={handleFinish} type="button">
+            <button
+              className="primary-btn"
+              onClick={handleFinish}
+              type="button"
+              disabled={!canFinishChain}
+            >
               Zavrsi lanac
             </button>
           </div>

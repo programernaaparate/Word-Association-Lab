@@ -15,6 +15,17 @@ export const runMigrations = async () => {
   const [userResetColumns] = await pool.query(
     "SHOW COLUMNS FROM users LIKE 'progress_reset_at'"
   )
+  const [userEmailColumns] = await pool.query("SHOW COLUMNS FROM users LIKE 'email'")
+  const [userAuthProviderColumns] = await pool.query("SHOW COLUMNS FROM users LIKE 'auth_provider'")
+  const [userGoogleIdColumns] = await pool.query("SHOW COLUMNS FROM users LIKE 'google_id'")
+  const [userAvatarColumns] = await pool.query("SHOW COLUMNS FROM users LIKE 'avatar_url'")
+  const [userPasswordHashColumns] = await pool.query("SHOW COLUMNS FROM users LIKE 'password_hash'")
+  const [userGoogleIdIndexes] = await pool.query(
+    "SHOW INDEX FROM users WHERE Key_name = 'unique_users_google_id'"
+  )
+  const [userEmailIndexes] = await pool.query(
+    "SHOW INDEX FROM users WHERE Key_name = 'unique_users_email'"
+  )
   const [associationSymbolColumns] = await pool.query(
     "SHOW COLUMNS FROM association_words LIKE 'symbol'"
   )
@@ -23,6 +34,36 @@ export const runMigrations = async () => {
     await pool.query(
       'ALTER TABLE users ADD COLUMN progress_reset_at TIMESTAMP NULL DEFAULT NULL'
     )
+  }
+
+  if (!userEmailColumns.length) {
+    await pool.query('ALTER TABLE users ADD COLUMN email VARCHAR(255) NULL AFTER username')
+  }
+
+  if (!userAuthProviderColumns.length) {
+    await pool.query(
+      "ALTER TABLE users ADD COLUMN auth_provider VARCHAR(30) NOT NULL DEFAULT 'local' AFTER password_hash"
+    )
+  }
+
+  if (!userGoogleIdColumns.length) {
+    await pool.query('ALTER TABLE users ADD COLUMN google_id VARCHAR(255) NULL AFTER auth_provider')
+  }
+
+  if (!userAvatarColumns.length) {
+    await pool.query('ALTER TABLE users ADD COLUMN avatar_url TEXT NULL AFTER google_id')
+  }
+
+  if (userPasswordHashColumns[0]?.Null === 'NO') {
+    await pool.query('ALTER TABLE users MODIFY COLUMN password_hash VARCHAR(255) NULL')
+  }
+
+  if (!userGoogleIdIndexes.length) {
+    await pool.query('ALTER TABLE users ADD UNIQUE KEY unique_users_google_id (google_id)')
+  }
+
+  if (!userEmailIndexes.length) {
+    await pool.query('ALTER TABLE users ADD UNIQUE KEY unique_users_email (email)')
   }
 
   if (!associationSymbolColumns.length) {

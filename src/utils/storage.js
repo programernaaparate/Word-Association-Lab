@@ -4,7 +4,11 @@ import {
   DEFAULT_RELATION_CHALLENGES as RELATION_CONTENT_MATRIX,
   DEFAULT_WORD_CHAIN_PRESETS,
 } from './defaultGameContent'
-import { evaluateSmartConceptAnswer, repairLegacyText } from './localSmartMatching'
+import {
+  evaluateSmartAssociationAnswer,
+  evaluateSmartConceptAnswer,
+  repairLegacyText,
+} from './localSmartMatching'
 
 const DEFAULT_ASSOCIATION_WORDS = [
   {
@@ -180,6 +184,71 @@ const ALL_CATEGORY = 'Sve'
 const AUTH_TOKEN_KEY = 'authToken'
 const RECENT_CONTENT_ROTATIONS_KEY = 'recentContentRotations'
 const DIFFICULTY_ORDER = ['Lako', 'Srednje', 'Tesko']
+const HISTORY_LIMIT = 250
+const HISTORY_DATE_FORMATTER = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Podgorica',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+const ACHIEVEMENT_DEFINITIONS = [
+  {
+    key: 'first-game',
+    label: 'Prvi korak',
+    description: 'Odigraj prvu partiju u labu.',
+    tone: 'blue',
+    metric: 'totalGames',
+    target: 1,
+  },
+  {
+    key: 'xp-1000',
+    label: '1000 XP',
+    description: 'Sakupi ukupno 1000 XP iz istorije.',
+    tone: 'gold',
+    metric: 'totalPoints',
+    target: 1000,
+  },
+  {
+    key: 'streak-3',
+    label: 'Niz od 3',
+    description: 'Odrzi tri dana igre zaredom.',
+    tone: 'green',
+    metric: 'longestStreak',
+    target: 3,
+  },
+  {
+    key: 'combo-4',
+    label: 'Combo x4',
+    description: 'Spoji cetiri uzastopna tacna poteza.',
+    tone: 'red',
+    metric: 'bestCombo',
+    target: 4,
+  },
+  {
+    key: 'perfect-3',
+    label: 'Perfekcionista',
+    description: 'Zavrsi tri partije bez greske.',
+    tone: 'violet',
+    metric: 'perfectRuns',
+    target: 3,
+  },
+  {
+    key: 'all-rounder',
+    label: 'Svestran igrac',
+    description: 'Odigraj sva 4 moda igre.',
+    tone: 'sand',
+    metric: 'distinctModeCount',
+    target: 4,
+  },
+  {
+    key: 'daily-7',
+    label: 'Daily rutina',
+    description: 'Zavrsi 7 dnevnih izazova.',
+    tone: 'teal',
+    metric: 'completedDaily',
+    target: 7,
+  },
+]
 
 const readStorage = (key, fallback) => {
   try {
@@ -206,14 +275,7 @@ const shuffleItems = (items = []) => {
 }
 
 export const getTodayKey = () => {
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/Podgorica',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  })
-
-  const parts = formatter.formatToParts(new Date())
+  const parts = HISTORY_DATE_FORMATTER.formatToParts(new Date())
   const year = parts.find((part) => part.type === 'year')?.value
   const month = parts.find((part) => part.type === 'month')?.value
   const day = parts.find((part) => part.type === 'day')?.value
@@ -264,6 +326,7 @@ const sanitizeContentItem = (item = {}) => ({
 const sanitizeContentItems = (items = []) => (items || []).map(sanitizeContentItem)
 
 const sanitizeWordChainPreset = (preset = {}) => ({
+  id: repairLegacyText(preset.id || preset.centerWord || ''),
   centerWord: repairLegacyText(preset.centerWord || ''),
   starterNodes: (preset.starterNodes || []).map((node) => ({
     ...node,
@@ -271,6 +334,23 @@ const sanitizeWordChainPreset = (preset = {}) => ({
     relation: repairLegacyText(node.relation || ''),
   })),
 })
+
+const sanitizeWordChainPresetCollection = (value) => {
+  const presets = Array.isArray(value) ? value : value ? [value] : []
+
+  return presets
+    .map(sanitizeWordChainPreset)
+    .filter((preset) => Boolean(preset.centerWord) && preset.starterNodes.length > 0)
+}
+
+const buildLogicChallengeMergeKey = (item = {}) =>
+  [
+    item.mode || 'concept',
+    repairLegacyText(item.answer || ''),
+    repairLegacyText(item.category || ''),
+    repairLegacyText(item.difficulty || ''),
+    item.mode === 'odd-one-out' ? sanitizeTextArray(item.words || []).join('|') : '',
+  ].join('-')
 
 const mergeDefaultItems = (baseItems, extraItems, getKey) => {
   const mergedMap = new Map()
@@ -431,6 +511,148 @@ const getAwardedPointsFromHistoryItem = (item = {}) => {
   return Math.max(0, score - 1200)
 }
 
+const getHistoryDateKey = (dateValue) => {
+  if (!dateValue) {
+    return ''
+  }
+
+  const date = new Date(dateValue)
+
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  const parts = HISTORY_DATE_FORMATTER.formatToParts(date)
+  const year = parts.find((part) => part.type === 'year')?.value
+  const month = parts.find((part) => part.type === 'month')?.value
+  const day = parts.find((part) => part.type === 'day')?.value
+
+  return year && month && day ? `${year}-${month}-${day}` : ''
+}
+
+const dateKeyToUtcTimestamp = (dateKey = '') => {
+  const [year, month, day] = String(dateKey || '')
+    .split('-')
+    .map((value) => Number(value))
+
+  if (!year || !month || !day) {
+    return Number.NaN
+  }
+
+  return Date.UTC(year, month - 1, day)
+}
+
+const getDateKeyDifference = (leftDateKey = '', rightDateKey = '') => {
+  const leftTimestamp = dateKeyToUtcTimestamp(leftDateKey)
+  const rightTimestamp = dateKeyToUtcTimestamp(rightDateKey)
+
+  if (Number.isNaN(leftTimestamp) || Number.isNaN(rightTimestamp)) {
+    return Number.NaN
+  }
+
+  return Math.round((rightTimestamp - leftTimestamp) / 86400000)
+}
+
+const isSuccessfulAnswer = (answer = {}) => Boolean(answer?.accepted || answer?.partialAccepted)
+
+const deriveMaxComboFromAnswers = (answers = []) => {
+  let currentCombo = 0
+  let bestCombo = 0
+
+  ;(answers || []).forEach((answer) => {
+    if (isSuccessfulAnswer(answer)) {
+      currentCombo += 1
+      bestCombo = Math.max(bestCombo, currentCombo)
+      return
+    }
+
+    currentCombo = 0
+  })
+
+  return bestCombo
+}
+
+const deriveBestComboFromHistoryItem = (item = {}) => {
+  const savedCombo = Number(item.maxCombo)
+
+  if (Number.isFinite(savedCombo) && savedCombo >= 0) {
+    return savedCombo
+  }
+
+  return deriveMaxComboFromAnswers(item.answers || [])
+}
+
+const calculateStreakStats = (history = []) => {
+  const uniqueDateKeys = [...new Set((history || []).map((item) => getHistoryDateKey(item.createdAt)).filter(Boolean))].sort()
+
+  if (!uniqueDateKeys.length) {
+    return {
+      currentStreak: 0,
+      longestStreak: 0,
+      lastPlayedDateKey: '',
+    }
+  }
+
+  let longestStreak = 1
+  let runningStreak = 1
+
+  for (let index = 1; index < uniqueDateKeys.length; index += 1) {
+    const gap = getDateKeyDifference(uniqueDateKeys[index - 1], uniqueDateKeys[index])
+
+    if (gap === 1) {
+      runningStreak += 1
+      longestStreak = Math.max(longestStreak, runningStreak)
+    } else {
+      runningStreak = 1
+    }
+  }
+
+  const lastPlayedDateKey = uniqueDateKeys[uniqueDateKeys.length - 1]
+  const gapToToday = getDateKeyDifference(lastPlayedDateKey, getTodayKey())
+  let currentStreak = 0
+
+  if (!Number.isNaN(gapToToday) && gapToToday <= 1) {
+    currentStreak = 1
+
+    for (let index = uniqueDateKeys.length - 1; index > 0; index -= 1) {
+      const gap = getDateKeyDifference(uniqueDateKeys[index - 1], uniqueDateKeys[index])
+
+      if (gap === 1) {
+        currentStreak += 1
+      } else {
+        break
+      }
+    }
+  }
+
+  return {
+    currentStreak,
+    longestStreak,
+    lastPlayedDateKey,
+  }
+}
+
+const buildAchievementProgressLabel = (currentValue = 0, targetValue = 0, unlocked = false) => {
+  if (unlocked) {
+    return 'Otkljucano'
+  }
+
+  return `${Math.min(Number(currentValue) || 0, Number(targetValue) || 0)}/${targetValue}`
+}
+
+const buildAchievements = (metrics = {}) =>
+  ACHIEVEMENT_DEFINITIONS.map((achievement) => {
+    const currentValue = Math.max(0, Number(metrics[achievement.metric]) || 0)
+    const unlocked = currentValue >= achievement.target
+
+    return {
+      ...achievement,
+      unlocked,
+      currentValue,
+      progressLabel: buildAchievementProgressLabel(currentValue, achievement.target, unlocked),
+    }
+  })
+
 const migrateProgressData = () => {
   if (localStorage.getItem('progressVersion') === '2') {
     return
@@ -547,7 +769,7 @@ export const getLogicChallenges = () => {
   const defaultChallenges = mergeDefaultItems(
     DEFAULT_LOGIC_CHALLENGES,
     LOGIC_CONTENT_MATRIX,
-    (item) => `${item.mode}-${item.answer}-${item.category}-${item.difficulty}`
+    buildLogicChallengeMergeKey
   )
   const storedChallenges = readStorage('logicChallenges', [])
 
@@ -555,7 +777,7 @@ export const getLogicChallenges = () => {
     mergeDefaultItems(
     storedChallenges,
     defaultChallenges,
-    (item) => `${item.mode}-${item.answer}-${item.category}-${item.difficulty}`
+    buildLogicChallengeMergeKey
   )
   )
 }
@@ -706,11 +928,39 @@ const saveRecentContentRotations = (value) => {
 
 const buildContentRotationKey = ({ gameType, difficulty, category, mode = 'default' }) =>
   [
+    getCurrentUser()?.id || 'guest',
     gameType || 'game',
     normalizeCategory(category),
     difficulty || DEFAULT_DIFFICULTY,
     mode || 'default',
   ].join('::')
+
+export const getSessionRoundSize = ({
+  availableCount = 0,
+  preferredCount = 5,
+  minimumCount = 1,
+} = {}) => {
+  const safeAvailableCount = Math.max(0, Number(availableCount) || 0)
+  if (!safeAvailableCount) {
+    return 0
+  }
+
+  const cappedPreferredCount = Math.max(
+    1,
+    Math.min(Number(preferredCount) || 1, safeAvailableCount)
+  )
+  const cappedMinimumCount = Math.max(
+    1,
+    Math.min(Number(minimumCount) || 1, cappedPreferredCount)
+  )
+
+  if (safeAvailableCount >= cappedPreferredCount * 2) {
+    return cappedPreferredCount
+  }
+
+  const halfPoolCount = Math.max(1, Math.floor(safeAvailableCount / 2))
+  return Math.min(cappedPreferredCount, Math.max(halfPoolCount, cappedMinimumCount))
+}
 
 export const getRotatedSessionItemIds = ({
   gameType,
@@ -719,6 +969,7 @@ export const getRotatedSessionItemIds = ({
   mode = 'default',
   items = [],
   count = 5,
+  commit = true,
 } = {}) => {
   const validItems = (items || []).filter((item) => item?.id !== undefined && item?.id !== null)
   if (!validItems.length) {
@@ -733,24 +984,26 @@ export const getRotatedSessionItemIds = ({
   const seenIds = (rotations[rotationKey] || []).filter((itemId) => uniqueIds.includes(itemId))
   const unseenIds = uniqueIds.filter((itemId) => !seenIds.includes(itemId))
 
-  let selectedIds = shuffleItems(unseenIds).slice(0, maxCount)
+  let selectedIds = []
+  let nextSeenIds = seenIds
 
-  if (selectedIds.length < maxCount) {
-    const remainingIds = shuffleItems(
-      uniqueIds.filter((itemId) => !selectedIds.includes(itemId))
-    )
-    selectedIds = [...selectedIds, ...remainingIds.slice(0, maxCount - selectedIds.length)]
+  if (unseenIds.length > 0) {
+    selectedIds = shuffleItems(unseenIds).slice(0, maxCount)
+    nextSeenIds = [...new Set([...seenIds, ...selectedIds])]
+    if (nextSeenIds.length >= uniqueIds.length) {
+      nextSeenIds = []
+    }
+  } else {
+    selectedIds = shuffleItems(uniqueIds).slice(0, maxCount)
+    nextSeenIds = selectedIds.length >= uniqueIds.length ? [] : [...selectedIds]
   }
 
-  let nextSeenIds = [...new Set([...seenIds, ...selectedIds])]
-  if (nextSeenIds.length >= uniqueIds.length) {
-    nextSeenIds = [...selectedIds]
+  if (commit) {
+    saveRecentContentRotations({
+      ...rotations,
+      [rotationKey]: nextSeenIds,
+    })
   }
-
-  saveRecentContentRotations({
-    ...rotations,
-    [rotationKey]: nextSeenIds,
-  })
 
   return selectedIds.map((itemId) => idMap.get(itemId)).filter(Boolean)
 }
@@ -820,46 +1073,56 @@ export const getRelationChallengesByDifficulty = (
 
 export const getWordChainPreset = (
   difficulty = DEFAULT_DIFFICULTY,
-  category = DEFAULT_CATEGORY
+  category = DEFAULT_CATEGORY,
+  { commit = true, presetId = null } = {}
 ) => {
   const normalizedCategory = normalizeCategory(category)
   const presetKey =
     normalizedCategory === ALL_CATEGORY
       ? `${DEFAULT_CATEGORY}-${difficulty}`
       : `${normalizedCategory}-${difficulty}`
+  const fallbackPresetKey = `${DEFAULT_CATEGORY}-${difficulty}`
+  const defaultFallbackPresetKey = `${DEFAULT_CATEGORY}-${DEFAULT_DIFFICULTY}`
+  const availablePresets = sanitizeWordChainPresetCollection(
+    DEFAULT_WORD_CHAIN_PRESETS[presetKey] ||
+      DEFAULT_WORD_CHAIN_PRESETS[fallbackPresetKey] ||
+      DEFAULT_WORD_CHAIN_PRESETS[defaultFallbackPresetKey]
+  )
+
+  if (!availablePresets.length) {
+    return sanitizeWordChainPreset({
+      id: `${presetKey}-fallback`,
+      centerWord: DEFAULT_CATEGORY,
+      starterNodes: [],
+    })
+  }
+
+  if (availablePresets.length === 1) {
+    return availablePresets[0]
+  }
+
+  if (presetId) {
+    return availablePresets.find((preset) => String(preset.id) === String(presetId)) || availablePresets[0]
+  }
+
+  const [selectedPresetId] = getRotatedSessionItemIds({
+    gameType: 'word-chain-preset',
+    difficulty,
+    category: normalizedCategory === ALL_CATEGORY ? DEFAULT_CATEGORY : normalizedCategory,
+    mode: presetKey,
+    items: availablePresets,
+    count: 1,
+    commit,
+  })
 
   return (
-    sanitizeWordChainPreset(
-      DEFAULT_WORD_CHAIN_PRESETS[presetKey] ||
-        DEFAULT_WORD_CHAIN_PRESETS[`${DEFAULT_CATEGORY}-${difficulty}`] ||
-        DEFAULT_WORD_CHAIN_PRESETS[`${DEFAULT_CATEGORY}-${DEFAULT_DIFFICULTY}`]
-    )
+    availablePresets.find((preset) => String(preset.id) === String(selectedPresetId)) ||
+    availablePresets[0]
   )
 }
 
 export const evaluateAssociationAnswer = (wordItem, answer) => {
-  const normalizedAnswer = normalizeText(answer)
-  if (!normalizedAnswer) {
-    return { accepted: false, matchedAnswer: null }
-  }
-
-  const acceptedAnswers = [
-    normalizeText(wordItem?.word || ''),
-    ...(wordItem?.acceptedAnswers || []).map(normalizeText),
-  ].filter(Boolean)
-  const directMatch = acceptedAnswers.find((item) => item === normalizedAnswer)
-  if (directMatch) {
-    return { accepted: true, matchedAnswer: directMatch }
-  }
-
-  const closeMatch = acceptedAnswers.find(
-    (item) => item.includes(normalizedAnswer) || normalizedAnswer.includes(item)
-  )
-
-  return {
-    accepted: Boolean(closeMatch),
-    matchedAnswer: closeMatch || null,
-  }
+  return evaluateSmartAssociationAnswer(wordItem, answer)
 }
 
 export const evaluateExactAnswer = (expectedAnswer, actualAnswer) => {
@@ -899,6 +1162,74 @@ export const saveGameHistory = (history) => {
   writeStorage('gameHistory', history)
 }
 
+export const getPlayerProgressOverview = (history = getCurrentUserGameHistory()) => {
+  const safeHistory = Array.isArray(history) ? history : []
+  const totalGames = safeHistory.length
+  const totalPoints = safeHistory.reduce(
+    (sum, item) => sum + getAwardedPointsFromHistoryItem(item),
+    0
+  )
+  const completedDaily = safeHistory.filter((item) => Number(item.dailyReward || 0) > 0).length
+  const averageAccuracy = totalGames
+    ? Math.round(safeHistory.reduce((sum, item) => sum + (Number(item.accuracy) || 0), 0) / totalGames)
+    : 0
+  const bestScore = safeHistory.reduce(
+    (highest, item) => Math.max(highest, getAwardedPointsFromHistoryItem(item)),
+    0
+  )
+  const bestCombo = safeHistory.reduce(
+    (highest, item) => Math.max(highest, deriveBestComboFromHistoryItem(item)),
+    0
+  )
+  const perfectRuns = safeHistory.filter((item) => {
+    const totalRounds = Math.max(0, Number(item.total) || 0)
+    const accuracy = Math.max(0, Number(item.accuracy) || 0)
+    const wrongAttempts = Math.max(0, Number(item.wrongAttempts) || 0)
+
+    return totalRounds > 0 && accuracy === 100 && wrongAttempts === 0
+  }).length
+  const distinctModeCount = new Set(safeHistory.map((item) => item.type).filter(Boolean)).size
+  const streakStats = calculateStreakStats(safeHistory)
+  const achievements = buildAchievements({
+    totalGames,
+    totalPoints,
+    completedDaily,
+    bestCombo,
+    perfectRuns,
+    distinctModeCount,
+    longestStreak: streakStats.longestStreak,
+  })
+  const unlockedAchievements = achievements.filter((item) => item.unlocked)
+
+  return {
+    totalGames,
+    totalPoints,
+    completedDaily,
+    averageAccuracy,
+    bestScore,
+    bestCombo,
+    perfectRuns,
+    distinctModeCount,
+    currentStreak: streakStats.currentStreak,
+    longestStreak: streakStats.longestStreak,
+    lastPlayedDateKey: streakStats.lastPlayedDateKey,
+    achievements,
+    unlockedAchievements,
+    achievementCount: unlockedAchievements.length,
+  }
+}
+
+export const getNewUnlockedAchievements = (
+  previousOverview = {},
+  nextOverview = getPlayerProgressOverview()
+) => {
+  const previousKeys = new Set(
+    (previousOverview.unlockedAchievements || []).map((item) => item.key)
+  )
+
+  return (nextOverview.unlockedAchievements || []).filter((item) => !previousKeys.has(item.key))
+}
+
 export const addGameHistory = (item) => {
   const history = getGameHistory()
   const currentUser = getCurrentUser()
@@ -910,7 +1241,7 @@ export const addGameHistory = (item) => {
     ...item,
   }
 
-  saveGameHistory([historyItem, ...history].slice(0, 50))
+  saveGameHistory([historyItem, ...history].slice(0, HISTORY_LIMIT))
 }
 
 export const clearGameHistory = () => {
@@ -918,24 +1249,17 @@ export const clearGameHistory = () => {
 }
 
 export const getHistorySummary = () => {
-  const history = getCurrentUserGameHistory()
-  const totalGames = history.length
-  const totalPoints = history.reduce(
-    (sum, item) => sum + Math.max(0, Number(item.awardedPoints ?? item.earnedPoints ?? 0) || 0),
-    0
-  )
-  const completedDaily = history.filter((item) => Number(item.dailyReward || 0) > 0).length
-  const averageAccuracy = totalGames
-    ? Math.round(
-        history.reduce((sum, item) => sum + (item.accuracy || 0), 0) / totalGames
-      )
-    : 0
+  const summary = getPlayerProgressOverview()
 
   return {
-    totalGames,
-    totalPoints,
-    completedDaily,
-    averageAccuracy,
+    totalGames: summary.totalGames,
+    totalPoints: summary.totalPoints,
+    completedDaily: summary.completedDaily,
+    averageAccuracy: summary.averageAccuracy,
+    currentStreak: summary.currentStreak,
+    longestStreak: summary.longestStreak,
+    bestCombo: summary.bestCombo,
+    achievementCount: summary.achievementCount,
   }
 }
 

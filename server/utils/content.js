@@ -52,6 +52,46 @@ const CONTENT_CONFIG = {
   },
 }
 
+const lower = (value) => String(value || '').trim().toLowerCase()
+
+const buildContentIdentityKey = (type, item = {}) => {
+  if (type === 'logic') {
+    return [
+      item.mode || 'concept',
+      lower(item.answer),
+      item.category || '',
+      item.difficulty || '',
+      (item.mode || 'concept') === 'odd-one-out' ? (item.words || []).map(lower).join('|') : '',
+    ].join('|')
+  }
+
+  if (type === 'relation') {
+    return [
+      lower(item.leftWord),
+      lower(item.rightWord),
+      item.relation || '',
+      item.category || '',
+      item.difficulty || '',
+    ].join('|')
+  }
+
+  return [lower(item.word), item.category || '', item.difficulty || ''].join('|')
+}
+
+const dedupeContentItems = (type, items = []) => {
+  const itemMap = new Map()
+
+  items.forEach((item) => {
+    const key = buildContentIdentityKey(type, item)
+
+    if (!itemMap.has(key)) {
+      itemMap.set(key, item)
+    }
+  })
+
+  return Array.from(itemMap.values())
+}
+
 const parseJsonArray = (value) => {
   if (Array.isArray(value)) {
     return value
@@ -168,7 +208,7 @@ export const getContentItemsByType = async (type, filters = {}, executor = null)
     executor
   )
 
-  return rows.map(config.mapRow)
+  return dedupeContentItems(type, rows.map(config.mapRow))
 }
 
 export const getContentItemByTypeAndId = async (type, id, executor = null) => {

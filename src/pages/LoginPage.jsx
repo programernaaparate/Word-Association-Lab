@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import AppIcon from '../components/AppIcon'
-import { loginUserRequest } from '../utils/api'
+import GoogleIdentityButton from '../components/GoogleIdentityButton'
+import { loginUserRequest, loginWithGoogleRequest } from '../utils/api'
 import { saveAuthSession } from '../utils/storage'
 
 function LoginPage() {
@@ -42,6 +43,26 @@ function LoginPage() {
         username: cleanUsername,
         password: cleanPassword,
       })
+
+      saveAuthSession({
+        token: response.token,
+        user: response.user,
+      })
+
+      navigate('/home')
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleGoogleLogin = async (credential) => {
+    try {
+      setIsSubmitting(true)
+      setError('')
+
+      const response = await loginWithGoogleRequest({ credential })
 
       saveAuthSession({
         token: response.token,
@@ -111,7 +132,10 @@ function LoginPage() {
             </button>
           </form>
 
-          <Link to="/register" className="secondary-btn full-btn text-center">
+          <Link
+            to="/register"
+            className="secondary-btn full-btn text-center auth-alt-link auth-alt-link-login"
+          >
             Registracija
           </Link>
 
@@ -120,13 +144,25 @@ function LoginPage() {
           </div>
 
           <div className="social-row">
-            <button className="social-btn" type="button" aria-label="Google prijava">
-              <AppIcon name="google" size={22} />
-            </button>
-            <button className="social-btn" type="button" aria-label="Apple prijava">
+            <GoogleIdentityButton
+              onCredential={handleGoogleLogin}
+              onError={setError}
+              disabled={isSubmitting}
+            />
+            <button
+              className="social-btn"
+              type="button"
+              aria-label="Apple prijava"
+              onClick={() => setError('Apple prijava stize uskoro.')}
+            >
               <AppIcon name="apple" size={22} />
             </button>
-            <button className="social-btn" type="button" aria-label="Facebook prijava">
+            <button
+              className="social-btn"
+              type="button"
+              aria-label="Facebook prijava"
+              onClick={() => setError('Facebook prijava stize uskoro.')}
+            >
               <AppIcon name="facebook" size={22} />
             </button>
           </div>

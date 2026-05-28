@@ -8,6 +8,7 @@ import {
   getCurrentUser,
   getCurrentUserGameHistory,
   getLevelProgress,
+  getPlayerProgressOverview,
   saveCurrentUser,
 } from '../utils/storage'
 
@@ -44,15 +45,11 @@ const mergeHistoryLists = (remoteHistory = []) => {
 }
 
 const buildHistorySummary = (history = []) => {
-  const totalGames = history.length
+  const overview = getPlayerProgressOverview(history)
 
   return {
-    totalGames,
-    totalPoints: getHistoryPoints(history),
-    completedDaily: history.filter((item) => Number(item.dailyReward || 0) > 0).length,
-    averageAccuracy: totalGames
-      ? Math.round(history.reduce((sum, item) => sum + (item.accuracy || 0), 0) / totalGames)
-      : 0,
+    ...overview,
+    totalPoints: Math.max(overview.totalPoints, getHistoryPoints(history)),
   }
 }
 
@@ -62,6 +59,7 @@ function HistoryPage() {
   const [history, setHistory] = useState(() => mergeHistoryLists([]))
   const [summary, setSummary] = useState(() => buildHistorySummary(mergeHistoryLists([])))
   const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(Boolean(token))
 
   useEffect(() => {
     let isMounted = true
@@ -70,6 +68,7 @@ function HistoryPage() {
       if (!token) return
 
       try {
+        setIsLoading(true)
         setError('')
         const [historyResponse, userResponse] = await Promise.all([
           getMyHistoryRequest(token),
@@ -117,6 +116,10 @@ function HistoryPage() {
             ? 'Prikazujemo lokalnu istoriju dok se backend ne usaglasi.'
             : requestError.message
         )
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
       }
     }
 
@@ -157,7 +160,7 @@ function HistoryPage() {
   }
 
   return (
-    <div className="screen">
+    <div className="screen app-screen">
       <div className="phone-card app-shell">
         <Navbar title="Napredak" showBack />
 
@@ -183,10 +186,29 @@ function HistoryPage() {
               </div>
             </div>
 
+            <div className="mini-stats-grid">
+              <div className="mini-stat-card">
+                <small>BEST XP</small>
+                <strong>{summary.bestScore}</strong>
+              </div>
+
+              <div className="mini-stat-card">
+                <small>PERFEKTNE</small>
+                <strong>{summary.perfectRuns}</strong>
+              </div>
+
+              <div className="mini-stat-card">
+                <small>BEDZEVI</small>
+                <strong>{summary.achievementCount}</strong>
+              </div>
+            </div>
+
             <div className="profile-info-box">
               <p><strong>Dnevni izazovi:</strong> {summary.completedDaily}</p>
               <p><strong>Nivo:</strong> {levelProgress.level}</p>
               <p><strong>Do sledeceg nivoa:</strong> {levelProgress.remainingXp} XP</p>
+              <p><strong>Aktivni streak:</strong> {summary.currentStreak} dana</p>
+              <p><strong>Najbolji combo:</strong> {summary.bestCombo > 0 ? `x${summary.bestCombo}` : 'Nema'}</p>
             </div>
           </div>
 
@@ -196,7 +218,9 @@ function HistoryPage() {
             {error ? <p className="error">{error}</p> : null}
 
             <div className="leaderboard-list">
-              {history.length > 0 ? (
+              {isLoading ? (
+                <div className="page-loading-card">Ucitavamo tvoju istoriju i napredak...</div>
+              ) : history.length > 0 ? (
                 history.map((item, index) => (
                   <div className="leaderboard-row" key={`${item.id}-${index}`}>
                     <div className="leaderboard-rank">#{index + 1}</div>

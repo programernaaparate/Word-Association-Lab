@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import BottomNav from '../components/BottomNav'
 import Navbar from '../components/Navbar'
@@ -23,6 +24,17 @@ function ResultsPage() {
   const performanceBonus = Math.max(0, result?.performanceBonus ?? 0)
   const wrongAttempts = Math.max(0, Number(result?.wrongAttempts ?? 0) || 0)
   const partialCount = Math.max(0, Number(result?.partialCount ?? 0) || 0)
+  const comboBonus = Math.max(0, Number(result?.comboBonus ?? 0) || 0)
+  const maxCombo = Math.max(0, Number(result?.maxCombo ?? 0) || 0)
+  const progressSnapshot = result?.progressSnapshot || {}
+  const currentStreak = Math.max(0, Number(progressSnapshot.currentStreak ?? 0) || 0)
+  const unlockedAchievementCount = Math.max(
+    0,
+    Number(
+      progressSnapshot.achievementCount ?? progressSnapshot.unlockedAchievements?.length ?? 0
+    ) || 0
+  )
+  const newAchievements = Array.isArray(result?.newAchievements) ? result.newAchievements : []
   const totalUserPoints = currentUser?.points ?? 0
   const levelData = getLevelProgress(totalUserPoints)
   const levelTheme = getLevelTheme(levelData.level)
@@ -31,6 +43,7 @@ function ResultsPage() {
   const displayScore = Math.max(0, result?.awardedPoints ?? totalAwardedPoints)
   const difficultyMultiplier = getDifficultyMultiplier(difficulty)
   const earnedBadges = buildResultBadges(result)
+  const [showAllAnswers, setShowAllAnswers] = useState(false)
   const hasAnyCorrectAnswer = correct > 0
   const hasAnyPartialAnswer =
     partialCount > 0 || answers.some((item) => Boolean(item.partialAccepted))
@@ -51,6 +64,25 @@ function ResultsPage() {
     : hasSubmittedAnswer
       ? 'Ova partija nije imala tacan odgovor za tip igre:'
       : 'Partija je zavrsena bez unesenog odgovora za tip igre:'
+  let nextTip = 'Kad zapnes, preskoci bez frustracije i cuvaj fokus za sledeci pojam.'
+
+  if (hintCount >= 2) {
+    nextTip =
+      'Probaj sledecu rundu sa manje pomoci. Najvise XP-a uzimas kad rjesenje uhvatis prije hint-a.'
+  } else if (wrongAttempts >= 2) {
+    nextTip =
+      'Tempo ti je dobar, ali vrijedi usporiti pola sekunde i potvrditi logiku prije klika ili unosa.'
+  } else if (partialCount > 0) {
+    nextTip =
+      'Bio si blizu. Sledeci put ciljaj precizniji pojam umjesto sire asocijacije.'
+  } else if (maxCombo >= 3) {
+    nextTip =
+      'Odlican momentum. Nastavi da cuvas combo bez praznih i brzopletih poteza.'
+  } else if (hasAnyCorrectAnswer) {
+    nextTip =
+      'Dobar prolaz. Ako sacuvas isti nivo preciznosti i brzine, streak i combo ce brzo rasti.'
+  }
+  const visibleAnswers = showAllAnswers ? answers : answers.slice(0, 3)
 
   const minutes = String(Math.floor(time / 60)).padStart(2, '0')
   const seconds = String(time % 60).padStart(2, '0')
@@ -100,7 +132,7 @@ function ResultsPage() {
   }
 
   return (
-    <div className="screen">
+    <div className="screen app-screen">
       <div className="phone-card app-shell">
         <Navbar title="Rezultati" rightText="X" onRightClick={() => navigate('/home')} />
 
@@ -143,17 +175,38 @@ function ResultsPage() {
                   </strong>
                 </div>
               </div>
+
+              <div className="mini-stats-grid results-stats-grid">
+                <div className="mini-stat-card">
+                  <small>AKTIVNI NIZ</small>
+                  <strong>{currentStreak}</strong>
+                </div>
+
+                <div className="mini-stat-card">
+                  <small>BEST COMBO</small>
+                  <strong>{maxCombo > 0 ? `x${maxCombo}` : '-'}</strong>
+                </div>
+
+                <div className="mini-stat-card">
+                  <small>BEDZEVI</small>
+                  <strong>{unlockedAchievementCount}</strong>
+                </div>
+              </div>
             </aside>
 
             <section className="results-main">
               <div className="section-row">
                 <h3 className="section-title">REZIME ODGOVORA</h3>
-                <span className="link-text">Poslednja partija</span>
+                <span className="link-text">
+                  {answers.length > 3 && !showAllAnswers
+                    ? `Prikaz 3 / ${answers.length}`
+                    : 'Poslednja partija'}
+                </span>
               </div>
 
               <div className="answer-cards">
                 {answers.length > 0 ? (
-                  answers.slice(0, 3).map((item, index) => (
+                  visibleAnswers.map((item, index) => (
                     <div
                       className="answer-card"
                       key={`${getAnswerPrompt(item)}-${item.answer}-${index}`}
@@ -216,6 +269,24 @@ function ResultsPage() {
                 )}
               </div>
 
+              {answers.length > 3 ? (
+                <div className="results-inline-meta">
+                  <p className="muted small-text">
+                    {showAllAnswers
+                      ? 'Prikazani su svi odgovori iz poslednje partije.'
+                      : 'Za brzi pregled prikazujemo prva 3 odgovora.'}
+                  </p>
+
+                  <button
+                    className="results-inline-toggle"
+                    type="button"
+                    onClick={() => setShowAllAnswers((prev) => !prev)}
+                  >
+                    {showAllAnswers ? 'Prikazi kraci pregled' : 'Prikazi sve odgovore'}
+                  </button>
+                </div>
+              ) : null}
+
               <div className="badges-card">
                 <h3>OSVOJENI BEDZEVI</h3>
                 <div className="badge-row">
@@ -227,6 +298,21 @@ function ResultsPage() {
                   ))}
                 </div>
               </div>
+
+              {newAchievements.length > 0 ? (
+                <div className="badges-card">
+                  <h3>NOVO OTKLJUCANO</h3>
+                  <div className="achievement-grid">
+                    {newAchievements.map((achievement) => (
+                      <div className="achievement-card" key={achievement.key}>
+                        <div className={`badge-circle ${achievement.tone}`}></div>
+                        <strong>{achievement.label}</strong>
+                        <small>{achievement.description}</small>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               <div className={`level-card level-hero-card ${levelTheme.tier}`}>
                 <div className="section-row">
@@ -245,6 +331,12 @@ function ResultsPage() {
                 </p>
               </div>
 
+              <div className="results-coach-card">
+                <small>SLEDECI KORAK</small>
+                <strong>Kako da sledeca partija bude jos bolja</strong>
+                <p>{nextTip}</p>
+              </div>
+
               <div className="profile-info-box">
                 <p><strong>Kategorija:</strong> {category}</p>
                 <p><strong>Izabrana tezina:</strong> {difficulty}</p>
@@ -252,6 +344,9 @@ function ResultsPage() {
                 <p><strong>Netacnih pokusaja:</strong> {wrongAttempts}</p>
                 <p><strong>Djelimicno tacnih:</strong> {partialCount}</p>
                 <p><strong>Iskoriscenih hintova:</strong> {hintCount}</p>
+                <p><strong>Aktivni streak:</strong> {currentStreak} dana</p>
+                <p><strong>Najbolji combo:</strong> {maxCombo > 0 ? `x${maxCombo}` : 'Nema'}</p>
+                <p><strong>Combo bonus:</strong> +{comboBonus}</p>
                 <p><strong>Zaradjen XP u partiji:</strong> +{earnedPoints}</p>
                 <p><strong>Bonus performansi:</strong> +{performanceBonus}</p>
                 <p><strong>Bonus dnevnog izazova:</strong> +{dailyReward}</p>

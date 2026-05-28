@@ -12,12 +12,14 @@ function ExplorePage() {
   const [filter, setFilter] = useState('all')
   const [exploreItems, setExploreItems] = useState([])
   const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     let isMounted = true
 
     const loadExploreItems = async () => {
       try {
+        setIsLoading(true)
         setError('')
 
         const [associationResponse, logicResponse, relationResponse] = await Promise.all([
@@ -67,6 +69,10 @@ function ExplorePage() {
         }
 
         setError(requestError.message)
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
       }
     }
 
@@ -109,9 +115,10 @@ function ExplorePage() {
     if (type === 'relation') return 'Sinonim / Antonim'
     return 'Asocijacija'
   }
+  const activeFilterLabel = filter === 'all' ? 'Sve stavke' : formatType(filter)
 
   return (
-    <div className="screen">
+    <div className="screen app-screen">
       <div className="phone-card app-shell">
         <Navbar title="Baza sadrzaja" showBack />
 
@@ -150,6 +157,11 @@ function ExplorePage() {
                 <small>RELACIJE</small>
                 <strong>{counts.relation}</strong>
               </div>
+            </div>
+
+            <div className="explore-filter-status">
+              <strong>Aktivni pregled:</strong> {activeFilterLabel}
+              {query.trim() ? ` / pretraga "${query.trim()}"` : ' / bez tekstualnog filtera'}
             </div>
 
             <div className="segmented slim">
@@ -204,7 +216,9 @@ function ExplorePage() {
             </div>
 
             <div className="explore-results-grid">
-              {filteredItems.length > 0 ? (
+              {isLoading ? (
+                <div className="page-loading-card">Ucitavamo bazu sadrzaja...</div>
+              ) : filteredItems.length > 0 ? (
                 filteredItems.map((item) => (
                   <article className="explore-result-card" key={item.id}>
                     <div className="explore-card-head">

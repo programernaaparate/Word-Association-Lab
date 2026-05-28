@@ -8,12 +8,14 @@ function LeaderboardPage() {
   const currentUser = getCurrentUser()
   const [users, setUsers] = useState([])
   const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     let isMounted = true
 
     const loadLeaderboard = async () => {
       try {
+        setIsLoading(true)
         setError('')
         const response = await getLeaderboardRequest()
 
@@ -23,6 +25,10 @@ function LeaderboardPage() {
       } catch (requestError) {
         if (!isMounted) return
         setError(requestError.message)
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
       }
     }
 
@@ -34,6 +40,7 @@ function LeaderboardPage() {
   }, [])
 
   const topUsers = useMemo(() => users.slice(0, 10), [users])
+  const podiumUsers = useMemo(() => topUsers.slice(0, 3), [topUsers])
   const currentUserRank = useMemo(() => {
     const rank = users.findIndex((user) => user.id === currentUser?.id) + 1
     return rank || null
@@ -47,7 +54,7 @@ function LeaderboardPage() {
   }
 
   return (
-    <div className="screen">
+    <div className="screen app-screen">
       <div className="phone-card app-shell">
         <Navbar title="Rang lista" showBack />
 
@@ -102,8 +109,23 @@ function LeaderboardPage() {
           )}
 
           <div className="leaderboard-card">
+            {podiumUsers.length > 0 ? (
+              <div className="leaderboard-podium">
+                {podiumUsers.map((user, index) => (
+                  <div className="leaderboard-podium-card" key={`podium-${user.id}`}>
+                    <span className="leaderboard-podium-rank">{getRankBadge(index)}</span>
+                    <strong>{user.username || 'Korisnik'}</strong>
+                    <small>Nivo {calculateLevelFromPoints(user.points || 0)}</small>
+                    <p>{user.points ?? 0} XP</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
             <div className="leaderboard-list">
-              {topUsers.length > 0 ? (
+              {isLoading ? (
+                <div className="page-loading-card">Ucitavamo rang listu...</div>
+              ) : topUsers.length > 0 ? (
                 topUsers.map((user, index) => (
                   <div
                     className={`leaderboard-row ${

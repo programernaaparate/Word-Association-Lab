@@ -15,11 +15,13 @@ import {
   getCurrentUser,
   getCurrentUserGameHistory,
   isExpiredDailySession,
+  getPlayerProgressOverview,
   getLevelProgress,
   logoutUser,
   saveCurrentUser,
 } from '../utils/storage'
 import { getLevelTheme } from '../utils/levelTheme'
+import { getSoundEnabled, playSuccessSound, saveSoundEnabled } from '../utils/uiFeedback'
 
 const getHistoryPoints = (history) =>
   history.reduce(
@@ -53,15 +55,14 @@ const mergeHistoryLists = (remoteHistory = []) => {
   )
 }
 
-const buildHistorySummary = (history = []) => ({
-  totalGames: history.length,
-  totalPoints: getHistoryPoints(history),
-  completedDaily: history.filter((item) => Number(item.dailyReward || 0) > 0).length,
-  bestScore: history.reduce(
-    (highest, item) => Math.max(highest, Number(item.awardedPoints ?? item.earnedPoints ?? 0) || 0),
-    0
-  ),
-})
+const buildHistorySummary = (history = []) => {
+  const overview = getPlayerProgressOverview(history)
+
+  return {
+    ...overview,
+    totalPoints: Math.max(overview.totalPoints, getHistoryPoints(history)),
+  }
+}
 
 function ProfilePage() {
   const navigate = useNavigate()
@@ -70,6 +71,7 @@ function ProfilePage() {
   const [user, setUser] = useState(() => getCurrentUser())
   const [summary, setSummary] = useState(() => buildHistorySummary(mergeHistoryLists([])))
   const [error, setError] = useState('')
+  const [soundEnabled, setSoundEnabled] = useState(() => getSoundEnabled())
   const hasContinuableSession = Boolean(activeSession?.type) && !isExpiredDailySession(activeSession)
 
   useEffect(() => {
@@ -207,8 +209,17 @@ function ProfilePage() {
     navigate('/register')
   }
 
+  const handleSoundToggle = () => {
+    const nextValue = saveSoundEnabled(!soundEnabled)
+    setSoundEnabled(nextValue)
+
+    if (nextValue) {
+      playSuccessSound()
+    }
+  }
+
   return (
-    <div className="screen">
+    <div className="screen app-screen">
       <div className="phone-card app-shell">
         <Navbar title="Profil" showBack />
 
@@ -254,6 +265,8 @@ function ProfilePage() {
               <p><strong>Korisnicko ime:</strong> {username}</p>
               <p><strong>Uloga:</strong> {user?.role || 'user'}</p>
               <p><strong>Status:</strong> Aktivan korisnik</p>
+              <p><strong>Aktivni streak:</strong> {summary.currentStreak} dana</p>
+              <p><strong>Najbolji combo:</strong> x{summary.bestCombo}</p>
             </div>
           </div>
 
@@ -286,8 +299,47 @@ function ProfilePage() {
               </div>
             </div>
 
+            <div className="mini-stats-grid">
+              <div className="mini-stat-card">
+                <small>NIZ</small>
+                <strong>{summary.currentStreak}</strong>
+              </div>
+
+              <div className="mini-stat-card">
+                <small>COMBO</small>
+                <strong>{summary.bestCombo > 0 ? `x${summary.bestCombo}` : '-'}</strong>
+              </div>
+
+              <div className="mini-stat-card">
+                <small>BEDZEVI</small>
+                <strong>{summary.achievementCount}</strong>
+              </div>
+            </div>
+
             <div className="profile-info-box">
               <p><strong>Ukupno zaradjen XP iz istorije:</strong> {summary.totalPoints}</p>
+              <p><strong>Najduzi streak:</strong> {summary.longestStreak} dana</p>
+              <p><strong>Perfektnih partija:</strong> {summary.perfectRuns}</p>
+            </div>
+          </div>
+
+          <div className="leaderboard-card">
+            <div className="section-row">
+              <h2>Otkljucani bedzevi</h2>
+              <span className="muted">{summary.achievementCount} ukupno</span>
+            </div>
+
+            <div className="achievement-grid">
+              {(summary.achievements || []).map((achievement) => (
+                <div className="achievement-card" key={achievement.key}>
+                  <div className={`badge-circle ${achievement.tone}`}></div>
+                  <strong>{achievement.label}</strong>
+                  <small>{achievement.description}</small>
+                  <span className={achievement.unlocked ? 'link-text' : 'muted'}>
+                    {achievement.progressLabel}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -310,7 +362,11 @@ function ProfilePage() {
                     Nastavi
                   </button>
 
-                  <button className="share-btn" type="button" onClick={handleClearSession}>
+                  <button
+                    className="secondary-btn full-btn"
+                    type="button"
+                    onClick={handleClearSession}
+                  >
                     Zatvori
                   </button>
                 </div>
@@ -329,6 +385,10 @@ function ProfilePage() {
             </div>
 
             <div className="settings-stack">
+              <button className="secondary-btn full-btn" type="button" onClick={handleSoundToggle}>
+                Zvukovi: {soundEnabled ? 'Ukljuceni' : 'Iskljuceni'}
+              </button>
+
               {user?.role === 'admin' && (
                 <>
                   <button

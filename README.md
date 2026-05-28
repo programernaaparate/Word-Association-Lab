@@ -44,6 +44,9 @@ Primer:
 PORT=4000
 CLIENT_URL=http://localhost:5173
 JWT_SECRET=wal_local_2026_secure_4n7k9q_podgorica_seed_ready
+VITE_API_URL=http://localhost:4000/api
+GOOGLE_CLIENT_ID=
+VITE_GOOGLE_CLIENT_ID=
 
 DB_HOST=127.0.0.1
 DB_PORT=3306
@@ -81,6 +84,91 @@ Frontend:
 ```powershell
 npm run dev
 ```
+
+## Kako prebaciti projekat na drugi laptop
+
+Ako hoces da projekat radi isto kao ovde, prebaci sledece:
+
+- ceo folder `word-association-lab`
+- `.env`
+- MySQL bazu
+
+### Varijanta A: identicno stanje kao na ovom racunaru
+
+Ova varijanta prebacuje i:
+
+- korisnike
+- istoriju partija
+- daily progress
+- admin sadrzaj
+- leaderboard stanje
+
+#### 1. Export baze na starom racunaru
+
+```powershell
+mysqldump -u root -p word_association_lab > wal_backup.sql
+```
+
+#### 2. Prebaci na laptop
+
+Prebaci:
+
+- folder projekta
+- `wal_backup.sql`
+- `.env`
+
+#### 3. Na laptopu instaliraj
+
+- Node.js
+- MySQL
+
+#### 4. U projektu na laptopu
+
+```powershell
+npm install
+```
+
+#### 5. Napravi bazu i vrati dump
+
+```powershell
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS word_association_lab CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -u root -p word_association_lab < wal_backup.sql
+```
+
+#### 6. Pokreni backend i frontend
+
+```powershell
+npm run server:dev
+npm run dev
+```
+
+### Varijanta B: svjeza baza, isti kod
+
+Ako hoces samo aplikaciju i sadrzaj, bez starih korisnika i istorije:
+
+```powershell
+mysql -u root -p < server/sql/schema.sql
+mysql -u root -p word_association_lab < server/sql/seed_mega_insert_only.sql
+```
+
+Zatim:
+
+```powershell
+npm install
+npm run server:dev
+npm run dev
+```
+
+## Google login
+
+Google login je implementiran u kodu, ali da bi stvarno radio moras ubaciti pravi Google OAuth Client ID u `.env`:
+
+```env
+GOOGLE_CLIENT_ID=tvoj_google_client_id
+VITE_GOOGLE_CLIENT_ID=tvoj_google_client_id
+```
+
+Bez toga ce Google dugme javiti da prijava jos nije konfigurirana.
 
 ## Skripte
 

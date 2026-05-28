@@ -120,6 +120,73 @@ export const calculatePerformanceBonus = ({
   )
 }
 
+export const calculateComboBonus = ({
+  difficulty = 'Lako',
+  comboStreak = 0,
+  partialAccepted = false,
+  hintUsed = false,
+}) => {
+  const safeCombo = Math.max(0, Math.floor(Number(comboStreak) || 0))
+
+  if (safeCombo < 2) {
+    return 0
+  }
+
+  let rawBonus = 4 + safeCombo * 4
+
+  if (safeCombo >= 4) {
+    rawBonus += 4
+  }
+
+  if (partialAccepted) {
+    rawBonus = Math.round(rawBonus * 0.6)
+  }
+
+  if (hintUsed) {
+    rawBonus = Math.round(rawBonus * 0.7)
+  }
+
+  return applyDifficultyMultiplier(rawBonus, difficulty)
+}
+
+export const resolveComboProgress = ({
+  currentCombo = 0,
+  bestCombo = 0,
+  comboBonusTotal = 0,
+  difficulty = 'Lako',
+  accepted = false,
+  partialAccepted = false,
+  hintUsed = false,
+}) => {
+  const safeCurrentCombo = Math.max(0, Number(currentCombo) || 0)
+  const safeBestCombo = Math.max(0, Number(bestCombo) || 0)
+  const safeComboBonusTotal = Math.max(0, Number(comboBonusTotal) || 0)
+
+  if (!accepted && !partialAccepted) {
+    return {
+      comboStreak: 0,
+      bestCombo: safeBestCombo,
+      comboBonusTotal: safeComboBonusTotal,
+      awardedComboBonus: 0,
+    }
+  }
+
+  const nextCombo = safeCurrentCombo + 1
+  const awardedComboBonus = calculateComboBonus({
+    difficulty,
+    comboStreak: nextCombo,
+    partialAccepted,
+    hintUsed,
+  })
+
+  return {
+    comboStreak: nextCombo,
+    bestCombo: Math.max(safeBestCombo, nextCombo),
+    comboBonusTotal: safeComboBonusTotal + awardedComboBonus,
+    awardedComboBonus,
+  }
+}
+
 export const buildResultBadges = (result = {}) => {
   const total = normalizeNumber(result.total)
   const correct = normalizeNumber(result.correct)
@@ -139,6 +206,9 @@ export const buildResultBadges = (result = {}) => {
   const difficulty = result.difficulty || 'Lako'
   const type = result.type || 'association'
   const perRoundTime = total > 0 ? time / total : time
+  const maxCombo = normalizeNumber(result.maxCombo)
+  const currentStreak = normalizeNumber(result.progressSnapshot?.currentStreak)
+  const newAchievements = Array.isArray(result.newAchievements) ? result.newAchievements : []
   const badges = []
   const completedAll = total > 0 && correct === total
   const flawlessRun = completedAll && accuracy === 100 && wrongAttempts === 0
@@ -171,6 +241,18 @@ export const buildResultBadges = (result = {}) => {
 
   if (normalizeNumber(result.performanceBonus) >= 20 && accuracy >= 75 && wrongAttempts <= 1) {
     badges.push({ key: 'performance', label: 'Top forma', tone: 'violet' })
+  }
+
+  if (maxCombo >= 3) {
+    badges.push({ key: 'combo', label: `Combo x${maxCombo}`, tone: 'red' })
+  }
+
+  if (currentStreak >= 3) {
+    badges.push({ key: 'streak', label: `${currentStreak} dana u nizu`, tone: 'teal' })
+  }
+
+  if (newAchievements.length > 0) {
+    badges.push({ key: 'unlock', label: 'Novo otkljucano', tone: 'gold' })
   }
 
   if ((type === 'logic' || type === 'logic-odd-one-out') && accuracy >= 75) {

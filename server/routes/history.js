@@ -10,6 +10,10 @@ import {
 } from '../utils/content.js'
 
 const router = Router()
+const MAX_HISTORY_SAVE_RETRIES = 3
+
+const isDeadlockError = (error) =>
+  error?.code === 'ER_LOCK_DEADLOCK' || error?.errno === 1213
 
 const mapHistoryItem = (item) => ({
   id: item.id,
@@ -113,135 +117,142 @@ router.post('/', requireAuth, async (req, res) => {
   const safeHintCount = Math.max(0, Number(hintCount) || 0)
   const completedSuccessfully = safeTotal > 0 && safeCorrect >= safeTotal
 
-  const connection = await getPool().getConnection()
+  for (let attempt = 1; attempt <= MAX_HISTORY_SAVE_RETRIES; attempt += 1) {
+    const connection = await getPool().getConnection()
 
-  try {
-    await connection.beginTransaction()
+    try {
+      await connection.beginTransaction()
 
-    let resolvedDailyReward = Math.max(0, Number(dailyReward) || 0)
+      let resolvedDailyReward = Math.max(0, Number(dailyReward) || 0)
 
-    if (isDaily) {
-      const todayKey = getDateKey()
-      const requestedDateKey = String(dailyDateKey || todayKey)
-      const expectedChallenge = await resolveDailyChallenge(
-        { dateKey: requestedDateKey },
-        connection
-      )
-
-      const matchesDailyChallenge =
-        requestedDateKey === todayKey &&
-        expectedChallenge &&
-        expectedChallenge.type === dailyContentType &&
-        Number(expectedChallenge.contentId) === Number(dailyContentId)
-
-      if (matchesDailyChallenge && completedSuccessfully) {
-        const [completionRows] = await connection.execute(
-          `SELECT id
-           FROM daily_challenge_completions
-           WHERE user_id = ? AND challenge_date = ?
-           LIMIT 1`,
-          [req.user.id, requestedDateKey]
+      if (isDaily) {
+        const todayKey = getDateKey()
+        const requestedDateKey = String(dailyDateKey || todayKey)
+        const expectedChallenge = await resolveDailyChallenge(
+          { dateKey: requestedDateKey },
+          connection
         )
 
-        if (!completionRows.length) {
-          resolvedDailyReward = DAILY_REWARD
+        const matchesDailyChallenge =
+          requestedDateKey === todayKey &&
+          expectedChallenge &&
+          expectedChallenge.type === dailyContentType &&
+          Number(expectedChallenge.contentId) === Number(dailyContentId)
 
-          await connection.execute(
-            `INSERT INTO daily_challenge_completions
-              (user_id, challenge_date, content_type, content_id, reward)
-             VALUES (?, ?, ?, ?, ?)`,
-            [
-              req.user.id,
-              requestedDateKey,
-              expectedChallenge.type,
-              expectedChallenge.contentId,
-              DAILY_REWARD,
-            ]
+        if (matchesDailyChallenge && completedSuccessfully) {
+          const [completionRows] = await connection.execute(
+            `SELECT id
+             FROM daily_challenge_completions
+             WHERE user_id = ? AND challenge_date = ?
+             LIMIT 1`,
+            [req.user.id, requestedDateKey]
           )
+
+          if (!completionRows.length) {
+            resolvedDailyReward = DAILY_REWARD
+
+            await connection.execute(
+              `INSERT INTO daily_challenge_completions
+                (user_id, challenge_date, content_type, content_id, reward)
+               VALUES (?, ?, ?, ?, ?)`,
+              [
+                req.user.id,
+                requestedDateKey,
+                expectedChallenge.type,
+                expectedChallenge.contentId,
+                DAILY_REWARD,
+              ]
+            )
+          } else {
+            resolvedDailyReward = 0
+          }
         } else {
           resolvedDailyReward = 0
         }
       } else {
         resolvedDailyReward = 0
       }
-    } else {
-      resolvedDailyReward = 0
-    }
 
-    const finalAwardedPoints = safeEarnedPoints + resolvedDailyReward
+      const finalAwardedPoints = safeEarnedPoints + resolvedDailyReward
 
-    const [insertResult] = await connection.execute(
-      `INSERT INTO game_history
-        (user_id, game_type, score, base_score, earned_points, awarded_points, total, correct,
-         accuracy, time_seconds, category, difficulty, hint_count, is_daily, daily_reward)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        req.user.id,
-        type,
-        safeScore,
-        safeBaseScore,
-        safeEarnedPoints,
-        finalAwardedPoints,
-        safeTotal,
-        safeCorrect,
-        safeAccuracy,
-        safeTime,
-        category,
-        difficulty,
-        safeHintCount,
-        Number(Boolean(isDaily)),
-        resolvedDailyReward,
-      ]
-    )
-
-    await connection.execute(
-      `UPDATE users
-       SET points = points + ?
-       WHERE id = ?`,
-      [finalAwardedPoints, req.user.id]
-    )
-
-    const [updatedUsers] = await connection.execute(
-      `SELECT id, username, role, points, level
-       FROM users
-       WHERE id = ?
-       LIMIT 1`,
-      [req.user.id]
-    )
-    const updatedUser = updatedUsers[0] || null
-
-    if (updatedUser) {
-      const nextLevel = calculateLevelFromPoints(updatedUser.points)
-
-      if (updatedUser.level !== nextLevel) {
-        await connection.execute('UPDATE users SET level = ? WHERE id = ?', [
-          nextLevel,
+      const [insertResult] = await connection.execute(
+        `INSERT INTO game_history
+          (user_id, game_type, score, base_score, earned_points, awarded_points, total, correct,
+           accuracy, time_seconds, category, difficulty, hint_count, is_daily, daily_reward)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
           req.user.id,
-        ])
-        updatedUser.level = nextLevel
+          type,
+          safeScore,
+          safeBaseScore,
+          safeEarnedPoints,
+          finalAwardedPoints,
+          safeTotal,
+          safeCorrect,
+          safeAccuracy,
+          safeTime,
+          category,
+          difficulty,
+          safeHintCount,
+          Number(Boolean(isDaily)),
+          resolvedDailyReward,
+        ]
+      )
+
+      await connection.execute(
+        `UPDATE users
+         SET points = points + ?
+         WHERE id = ?`,
+        [finalAwardedPoints, req.user.id]
+      )
+
+      const [updatedUsers] = await connection.execute(
+        `SELECT id, username, role, points, level
+         FROM users
+         WHERE id = ?
+         LIMIT 1`,
+        [req.user.id]
+      )
+      const updatedUser = updatedUsers[0] || null
+
+      if (updatedUser) {
+        const nextLevel = calculateLevelFromPoints(updatedUser.points)
+
+        if (updatedUser.level !== nextLevel) {
+          await connection.execute('UPDATE users SET level = ? WHERE id = ?', [
+            nextLevel,
+            req.user.id,
+          ])
+          updatedUser.level = nextLevel
+        }
       }
+      const [historyRows] = await connection.execute(
+        `SELECT id, game_type, score, base_score, earned_points, awarded_points, total, correct,
+                accuracy, time_seconds, category, difficulty, hint_count, is_daily,
+                daily_reward, created_at
+         FROM game_history
+         WHERE id = ?
+         LIMIT 1`,
+        [insertResult.insertId]
+      )
+
+      await connection.commit()
+
+      return res.status(201).json({
+        history: mapHistoryItem(historyRows[0]),
+        user: updatedUser,
+      })
+    } catch (error) {
+      await connection.rollback()
+
+      if (isDeadlockError(error) && attempt < MAX_HISTORY_SAVE_RETRIES) {
+        continue
+      }
+
+      throw error
+    } finally {
+      connection.release()
     }
-    const [historyRows] = await connection.execute(
-      `SELECT id, game_type, score, base_score, earned_points, awarded_points, total, correct,
-              accuracy, time_seconds, category, difficulty, hint_count, is_daily,
-              daily_reward, created_at
-       FROM game_history
-       WHERE id = ?
-       LIMIT 1`,
-      [insertResult.insertId]
-    )
-
-    await connection.commit()
-
-    return res.status(201).json({
-      history: mapHistoryItem(historyRows[0]),
-      user: updatedUser,
-    })
-  } catch (error) {
-    await connection.rollback()
-    throw error
-  } finally {
-    connection.release()
   }
 })
 

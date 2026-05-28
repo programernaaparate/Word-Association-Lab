@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import AppIcon from '../components/AppIcon'
-import { registerUserRequest } from '../utils/api'
+import GoogleIdentityButton from '../components/GoogleIdentityButton'
+import { loginWithGoogleRequest, registerUserRequest } from '../utils/api'
 import { saveAuthSession } from '../utils/storage'
 
 function RegisterPage() {
@@ -52,6 +53,26 @@ function RegisterPage() {
         username: cleanUsername,
         password: cleanPassword,
       })
+
+      saveAuthSession({
+        token: response.token,
+        user: response.user,
+      })
+
+      navigate('/home')
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleGoogleLogin = async (credential) => {
+    try {
+      setIsSubmitting(true)
+      setError('')
+
+      const response = await loginWithGoogleRequest({ credential })
 
       saveAuthSession({
         token: response.token,
@@ -121,9 +142,37 @@ function RegisterPage() {
             </button>
           </form>
 
-          <Link to="/login" className="secondary-btn full-btn text-center">
+          <Link to="/login" className="secondary-btn full-btn text-center auth-alt-link">
             Vec imam nalog
           </Link>
+
+          <div className="divider">
+            <span>ILI NASTAVI SA</span>
+          </div>
+
+          <div className="social-row">
+            <GoogleIdentityButton
+              onCredential={handleGoogleLogin}
+              onError={setError}
+              disabled={isSubmitting}
+            />
+            <button
+              className="social-btn"
+              type="button"
+              aria-label="Apple prijava"
+              onClick={() => setError('Apple prijava stize uskoro.')}
+            >
+              <AppIcon name="apple" size={22} />
+            </button>
+            <button
+              className="social-btn"
+              type="button"
+              aria-label="Facebook prijava"
+              onClick={() => setError('Facebook prijava stize uskoro.')}
+            >
+              <AppIcon name="facebook" size={22} />
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -39,15 +39,31 @@ const getBrowserHostApiUrl = () => {
   return `http://${hostName}:4000/api`
 }
 
+const getUniqueApiBaseUrls = (urls = []) => [...new Set(urls.filter(Boolean))]
+
 const getCandidateApiBaseUrls = () => {
   const configuredApiUrl = normalizeApiBaseUrl(import.meta.env.VITE_API_URL)
   const storedApiUrl = getStoredApiBaseUrl()
   const browserHostApiUrl = normalizeApiBaseUrl(getBrowserHostApiUrl())
-  const defaults = isNativeAndroid()
-    ? ['http://10.0.2.2:4000/api']
-    : ['http://localhost:4000/api', 'http://127.0.0.1:4000/api']
 
-  return [...new Set([configuredApiUrl, storedApiUrl, browserHostApiUrl, ...defaults].filter(Boolean))]
+  if (isNativeAndroid()) {
+    return getUniqueApiBaseUrls([
+      configuredApiUrl,
+      storedApiUrl,
+      'http://10.0.2.2:4000/api',
+      browserHostApiUrl,
+      'http://localhost:4000/api',
+      'http://127.0.0.1:4000/api',
+    ])
+  }
+
+  return getUniqueApiBaseUrls([
+    browserHostApiUrl,
+    'http://localhost:4000/api',
+    'http://127.0.0.1:4000/api',
+    storedApiUrl,
+    configuredApiUrl,
+  ])
 }
 
 const getPrimaryApiBaseUrl = () => getCandidateApiBaseUrls()[0] || 'http://localhost:4000/api'
@@ -127,6 +143,12 @@ export const loginUserRequest = (payload) =>
 
 export const registerUserRequest = (payload) =>
   apiRequest('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+
+export const loginWithGoogleRequest = (payload) =>
+  apiRequest('/auth/google', {
     method: 'POST',
     body: JSON.stringify(payload),
   })

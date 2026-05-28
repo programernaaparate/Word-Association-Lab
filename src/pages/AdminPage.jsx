@@ -456,7 +456,7 @@ function AdminPage() {
   }
 
   return (
-    <div className="screen">
+    <div className="screen app-screen">
       <div className="phone-card app-shell">
         <Navbar title="Admin panel" showBack />
 
