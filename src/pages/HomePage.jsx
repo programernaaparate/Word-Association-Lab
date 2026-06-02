@@ -103,7 +103,7 @@ function HomePage() {
   )
   const levelTheme = getLevelTheme(displayLevel)
   const dailyStatusCopy = dailyChallenge?.isCompleted
-    ? 'Danasnji izazov je vec uspjesno zavrsen.'
+    ? 'Danasnji izazov je vec zavrsen. Mozes ga ponoviti samo za vjezbu, bez novog XP-a.'
     : dailyChallenge?.content
       ? `Dnevni izazov je spreman za ${selectedDifficulty.toLowerCase()} / ${selectedCategory.toLowerCase()} izbor.`
       : isDailyLoading
@@ -247,6 +247,10 @@ function HomePage() {
           ? {
               ...response.challenge,
               isCompleted: response.challenge.isCompleted || localCompleted,
+              reward:
+                response.challenge.isCompleted || localCompleted
+                  ? 0
+                  : response.challenge.reward || 0,
               progress:
                 response.challenge.isCompleted || localCompleted
                   ? 100
@@ -512,7 +516,7 @@ function HomePage() {
               <span className="daily-badge">Dnevni izazov</span>
               <span className="daily-timer">
                 {dailyChallenge?.isCompleted
-                  ? 'Zavrseno'
+                  ? 'Bez XP'
                   : dailyChallenge?.reward
                     ? `+${dailyChallenge.reward} XP`
                     : isDailyLoading

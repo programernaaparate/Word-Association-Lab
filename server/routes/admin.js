@@ -115,6 +115,18 @@ const mapSubmission = (item) => ({
 })
 
 const enrichSubmission = async (submission) => {
+  if (
+    submission?.submissionKind === 'answer_review' &&
+    (!submission?.contentType || !submission?.contentItemId)
+  ) {
+    return {
+      ...submission,
+      requestedAction: submission.proposedAnswer
+        ? `Provjeri da li prijedlog "${submission.proposedAnswer}" treba prihvatiti za igru "${submission.type}".`
+        : `Pregledaj korisnicki prijedlog za igru "${submission.type}".`,
+    }
+  }
+
   if (!submission?.contentType || !submission?.contentItemId) {
     return submission
   }

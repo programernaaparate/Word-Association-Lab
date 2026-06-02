@@ -243,7 +243,7 @@ export const buildDailyChallengePayload = ({
   return {
     id: `${dateKey}-${type}-${content.id}`,
     dateKey,
-    reward: DAILY_REWARD,
+    reward: isCompleted ? 0 : DAILY_REWARD,
     progress: isCompleted ? 100 : 0,
     isCompleted,
     type,

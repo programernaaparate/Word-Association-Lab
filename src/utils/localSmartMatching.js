@@ -67,6 +67,7 @@ const TERM_ALIAS_GROUPS = [
   ['dubler', 'kaskader', 'stunt dubler'],
   ['pravac', 'smjer', 'smer', 'kurs'],
   ['mapa', 'karta'],
+  ['eksplozija', 'detonacija'],
 ]
 
 const RELATED_CONCEPT_GROUPS = [
@@ -92,6 +93,20 @@ const RELATED_CONCEPT_GROUPS = [
   ['tehnologija', 'softver', 'software', 'program', 'algoritam', 'racunar', 'računar', 'kompjuter'],
   ['sport', 'fudbal', 'nogomet', 'rukomet', 'gimnastika', 'maraton', 'trka', 'štafeta', 'stafeta'],
   ['priroda', 'voda', 'more', 'rijeka', 'šuma', 'suma', 'sunce', 'vulkan', 'planina'],
+  [
+    'eksplozija',
+    'detonacija',
+    'eksploziv',
+    'dinamit',
+    'petarda',
+    'vatromet',
+    'bomba',
+    'udarni talas',
+    'krater',
+    'pepeo',
+    'vulkan',
+    'lava',
+  ],
   ['toplota', 'toplina', 'vrucina', 'vrućina', 'vrelina', 'temperatura', 'sunce', 'ljeto', 'vatra', 'energija'],
   ['umjetnost', 'muzika', 'simfonija', 'pozoriste', 'pozorište', 'teatar', 'skulptura', 'perspektiva'],
 ]
@@ -442,6 +457,7 @@ export const evaluateSmartWordChainCandidate = ({
   candidateWord = '',
   allowedWords = [],
   relation = '',
+  centerWord = '',
 } = {}) => {
   const actualVariants = buildAnswerVariants(candidateWord)
 
@@ -489,6 +505,17 @@ export const evaluateSmartWordChainCandidate = ({
         accepted: true,
         matchedWord: relatedMatch,
         reason: 'Prepoznata je prirodna asocijativna veza za ovu rundu.',
+      }
+    }
+
+    const centerRelatedConcepts = getRelatedConcepts([centerWord])
+    const centerMatch = centerRelatedConcepts.find((item) => actualRelatedConcepts.has(item))
+
+    if (centerMatch) {
+      return {
+        accepted: true,
+        matchedWord: centerWord,
+        reason: 'Prepoznata je prirodna asocijacija sa centralnim pojmom.',
       }
     }
   }

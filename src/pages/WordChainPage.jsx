@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import FirstRunTipCard from '../components/FirstRunTipCard'
 import GameHelpModal from '../components/GameHelpModal'
 import Navbar from '../components/Navbar'
-import { evaluateAiWordChainNodeRequest } from '../utils/api'
+import { createSubmissionRequest, evaluateAiWordChainNodeRequest } from '../utils/api'
 import { syncCompletedGame } from '../utils/gameSync'
 import {
   calculatePerformanceBonus,
@@ -201,6 +201,7 @@ const evaluateChain = (nodes, centerWord, difficulty, allowedNodes) => {
     const localSmartMatch = evaluateSmartWordChainCandidate({
       candidateWord: node.word,
       allowedWords: allowedNodes[node.relation] || [],
+      centerWord,
     })
     const isKnownRelation =
       Boolean(normalizedNodeWord) &&
@@ -325,6 +326,9 @@ function WordChainPage() {
     isSavedWordChainSession ? activeSession.relation || 'Asocijacija' : 'Asocijacija'
   )
   const [chainMessage, setChainMessage] = useState('')
+  const [pendingReviewCandidate, setPendingReviewCandidate] = useState(null)
+  const [reviewFeedback, setReviewFeedback] = useState('')
+  const [isReviewSubmitting, setIsReviewSubmitting] = useState(false)
   const [showHelpModal, setShowHelpModal] = useState(false)
   const [startedAt] = useState(
     isSavedWordChainSession
@@ -386,24 +390,84 @@ function WordChainPage() {
     starterNodesTemplate,
   ])
 
+  const queueReviewCandidate = (word, nextRelation, reason) => {
+    if (!token || !String(word || '').trim()) {
+      setPendingReviewCandidate(null)
+      return
+    }
+
+    setPendingReviewCandidate({
+      word: String(word || '').trim(),
+      relation: nextRelation,
+      reason: reason || '',
+    })
+  }
+
+  const handleSubmitNodeForReview = async () => {
+    if (!token || !pendingReviewCandidate?.word || isReviewSubmitting) {
+      return
+    }
+
+    try {
+      setIsReviewSubmitting(true)
+      setReviewFeedback('')
+
+      await createSubmissionRequest(token, {
+        gameType: 'Lanac rijeci',
+        content: [
+          `Centar: ${centerWord}`,
+          `Tip veze: ${pendingReviewCandidate.relation}`,
+          `Predlozena rijec: ${pendingReviewCandidate.word}`,
+          `Kategorija: ${category}`,
+          `Tezina: ${difficulty}`,
+          pendingReviewCandidate.reason ? `Razlog odbijanja: ${pendingReviewCandidate.reason}` : '',
+          (allowedNodes[pendingReviewCandidate.relation] || []).length
+            ? `Primjeri za ovu vezu: ${(allowedNodes[pendingReviewCandidate.relation] || [])
+                .slice(0, 6)
+                .join(', ')}`
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' | '),
+        points: 0,
+        time: 0,
+        isDaily: false,
+        submissionKind: 'answer_review',
+        proposedAnswer: pendingReviewCandidate.word,
+      })
+
+      setReviewFeedback(
+        'Prijedlog je poslat adminu na provjeru. Ako ga odobri, mozemo ga dodati medju prirodne veze za ubuduce.'
+      )
+      setPendingReviewCandidate(null)
+    } catch (requestError) {
+      setReviewFeedback(requestError.message || 'Slanje adminu trenutno nije uspjelo.')
+    } finally {
+      setIsReviewSubmitting(false)
+    }
+  }
+
   const handleAddNode = async () => {
     const trimmedWord = newWord.trim()
     const normalizedWord = normalizeWord(trimmedWord)
 
     if (!trimmedWord) {
       setChainMessage('Unesi rijec prije nego sto je dodas u lanac.')
+      setPendingReviewCandidate(null)
       playErrorSound()
       return
     }
 
     if (normalizedWord === normalizeWord(centerWord)) {
       setChainMessage('Nova rijec ne moze biti ista kao centralni pojam.')
+      setPendingReviewCandidate(null)
       playErrorSound()
       return
     }
 
     if (nodes.some((item) => normalizeWord(item.word) === normalizedWord)) {
       setChainMessage('Ta rijec je vec dodata u lanac.')
+      setPendingReviewCandidate(null)
       playErrorSound()
       return
     }
@@ -414,6 +478,7 @@ function WordChainPage() {
       candidateWord: trimmedWord,
       allowedWords: allowedNodes[relation] || [],
       relation,
+      centerWord,
     })
 
     if (
@@ -435,27 +500,36 @@ function WordChainPage() {
             aiValidated = true
             aiReason = aiEvaluation.reason || 'AI je potvrdio da ova veza ima smisla.'
           } else {
-            setChainMessage(
+            const rejectionReason =
               aiEvaluation.reason ||
-                localSmartMatch.reason ||
-                `Ta rijec nije prepoznata kao dobra ${relation.toLowerCase()} veza za "${centerWord}".`
+              localSmartMatch.reason ||
+              `Ta rijec nije prepoznata kao dobra ${relation.toLowerCase()} veza za "${centerWord}".`
+            setChainMessage(
+              rejectionReason
             )
+            queueReviewCandidate(trimmedWord, relation, rejectionReason)
             playErrorSound()
             return
           }
         } catch {
-          setChainMessage(
+          const rejectionReason =
             localSmartMatch.reason ||
-              `Ta rijec nije prepoznata kao dobra ${relation.toLowerCase()} veza za "${centerWord}".`
+            `Ta rijec nije prepoznata kao dobra ${relation.toLowerCase()} veza za "${centerWord}".`
+          setChainMessage(
+            rejectionReason
           )
+          queueReviewCandidate(trimmedWord, relation, rejectionReason)
           playErrorSound()
           return
         }
       } else {
-        setChainMessage(
+        const rejectionReason =
           localSmartMatch.reason ||
-            `Ta rijec nije prepoznata kao dobra ${relation.toLowerCase()} veza za "${centerWord}".`
+          `Ta rijec nije prepoznata kao dobra ${relation.toLowerCase()} veza za "${centerWord}".`
+        setChainMessage(
+          rejectionReason
         )
+        queueReviewCandidate(trimmedWord, relation, rejectionReason)
         playErrorSound()
         return
       }
@@ -473,6 +547,8 @@ function WordChainPage() {
     setNewWord('')
     setRelation('Asocijacija')
     setChainMessage('')
+    setPendingReviewCandidate(null)
+    setReviewFeedback('')
     playSuccessSound()
   }
 
@@ -484,6 +560,8 @@ function WordChainPage() {
   const handleClearChain = () => {
     setNodes(cloneChainNodes(starterNodesTemplate))
     setChainMessage('')
+    setPendingReviewCandidate(null)
+    setReviewFeedback('')
   }
 
   const handleFinish = async () => {
@@ -715,7 +793,16 @@ function WordChainPage() {
                 type="text"
                 placeholder="Dodaj novu povezanu rijec"
                 value={newWord}
-                onChange={(event) => setNewWord(event.target.value)}
+                onChange={(event) => {
+                  if (chainMessage) {
+                    setChainMessage('')
+                  }
+                  if (reviewFeedback) {
+                    setReviewFeedback('')
+                  }
+                  setPendingReviewCandidate(null)
+                  setNewWord(event.target.value)
+                }}
               />
 
               <label htmlFor="word-chain-relation">Tip veze</label>
@@ -724,7 +811,16 @@ function WordChainPage() {
                 name="wordChainRelation"
                 className="styled-select"
                 value={relation}
-                onChange={(event) => setRelation(event.target.value)}
+                onChange={(event) => {
+                  if (chainMessage) {
+                    setChainMessage('')
+                  }
+                  if (reviewFeedback) {
+                    setReviewFeedback('')
+                  }
+                  setPendingReviewCandidate(null)
+                  setRelation(event.target.value)
+                }}
               >
                 {RELATION_OPTIONS.map((item) => (
                   <option key={item}>{item}</option>
@@ -732,6 +828,20 @@ function WordChainPage() {
               </select>
 
               {chainMessage ? <p className="error chain-inline-error">{chainMessage}</p> : null}
+              {reviewFeedback ? <p className="muted small-text">{reviewFeedback}</p> : null}
+
+              {pendingReviewCandidate ? (
+                <button
+                  className="secondary-btn full-btn"
+                  onClick={handleSubmitNodeForReview}
+                  type="button"
+                  disabled={isReviewSubmitting}
+                >
+                  {isReviewSubmitting
+                    ? 'Slanje adminu...'
+                    : 'Posalji rijec adminu na provjeru'}
+                </button>
+              ) : null}
 
               <button className="primary-btn full-btn" onClick={handleAddNode} type="button">
                 Dodaj u lanac

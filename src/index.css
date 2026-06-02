@@ -4525,7 +4525,7 @@ body.native-app .bottom-nav {
 
 .admin-review-layout,
 .admin-content-layout {
-  grid-template-columns: minmax(290px, 0.9fr) minmax(0, 1.15fr);
+  grid-template-columns: minmax(340px, 1.05fr) minmax(0, 1fr);
 }
 
 .admin-review-list,
@@ -4602,7 +4602,7 @@ body.native-app .bottom-nav {
 .admin-review-card-head,
 .admin-content-card-head {
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) auto;
+  grid-template-columns: 46px minmax(0, 1fr) 84px;
   gap: 12px;
   align-items: start;
 }
@@ -4616,11 +4616,45 @@ body.native-app .bottom-nav {
   min-width: 0;
 }
 
+.admin-review-label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
 .admin-review-card-copy strong,
 .admin-user-card-copy strong,
 .admin-detail-panel h3 {
   display: block;
   margin-bottom: 4px;
+}
+
+.admin-review-card-title {
+  font-size: 22px;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+
+.admin-review-meta-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  color: #6c7785;
+  font-size: 14px;
+}
+
+.admin-review-user {
+  font-weight: 700;
+  color: #374252;
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+
+.admin-review-meta-separator {
+  color: #b0bac7;
 }
 
 .admin-review-card-copy p,
@@ -4637,6 +4671,31 @@ body.native-app .bottom-nav {
   flex-direction: column;
   align-items: flex-end;
   gap: 6px;
+}
+
+.admin-review-points-box {
+  min-width: 72px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f7faff, #eef5ff);
+  border: 1px solid #dce8fa;
+  text-align: right;
+}
+
+.admin-review-points-box small {
+  display: block;
+  margin-bottom: 4px;
+  color: #6d7b8c;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-review-points-box strong {
+  display: block;
+  color: #2e3b4d;
+  font-size: 22px;
+  line-height: 1;
 }
 
 .admin-priority-pill,
@@ -4683,9 +4742,28 @@ body.native-app .bottom-nav {
 }
 
 .admin-review-preview {
-  margin-top: 12px;
   margin-bottom: 0;
   line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.admin-review-preview-box {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid #e6edf5;
+  background: linear-gradient(180deg, #f8fbff, #f3f7fd);
+}
+
+.admin-review-preview-box small {
+  display: block;
+  margin-bottom: 6px;
+  color: #6f7d8e;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .admin-mini-tag,
@@ -4826,6 +4904,7 @@ body.native-app .bottom-nav {
 .admin-user-quick-actions .approve-btn,
 .admin-user-quick-actions .flag-btn {
   min-width: 0;
+  padding-inline: 20px;
 }
 
 .admin-user-quick-actions .flag-btn {
@@ -4882,6 +4961,11 @@ body.native-app .bottom-nav {
   .admin-review-card-side {
     grid-column: 2;
     align-items: flex-start;
+  }
+
+  .admin-review-points-box {
+    min-width: 0;
+    text-align: left;
   }
 
   .admin-user-quick-actions .flag-btn {

@@ -86,6 +86,29 @@ const getSubmissionPriorityLabel = (item = {}) => {
   return 'Novo za provjeru'
 }
 
+const getSubmissionCardTitle = (item = {}) => {
+  if (item?.type) {
+    return item.type
+  }
+
+  if (item?.requestedAction) {
+    return item.requestedAction
+  }
+
+  return 'Prijava'
+}
+
+const getSubmissionCardPreview = (item = {}) => {
+  const previewSource = item?.proposedAnswer
+    ? `Predlozen odgovor: ${item.proposedAnswer}`
+    : item?.contentLines?.[0] || item?.content || 'Bez dodatnog opisa.'
+
+  return String(previewSource)
+    .replace(/\s*\|\s*/g, ' · ')
+    .replace(/\s*->\s*/g, ' → ')
+    .replace(/,\s*/g, ', ')
+}
+
 const isAttentionSubmission = (item = {}) => getSubmissionPriorityRank(item) > 0
 
 const formatDateTime = (value) => {
@@ -1288,33 +1311,45 @@ function AdminPage() {
                             </div>
 
                             <div className="admin-review-card-copy">
-                              <span className="content-kind-tag">
-                                {getSubmissionKindLabel(item.submissionKind)}
-                              </span>
-                              <strong>{item.requestedAction || item.type}</strong>
-                              <p>
-                                {item.user} - {formatRelativeTime(item.createdAt)}
-                              </p>
+                              <div className="admin-review-label-row">
+                                <span className="content-kind-tag">
+                                  {getSubmissionKindLabel(item.submissionKind)}
+                                </span>
+                                <span
+                                  className={`admin-priority-pill ${getSubmissionPriorityTone(item)}`}
+                                >
+                                  {index === 0 ? 'Najnovije' : getSubmissionPriorityLabel(item)}
+                                </span>
+                              </div>
+                              <strong className="admin-review-card-title">
+                                {getSubmissionCardTitle(item)}
+                              </strong>
+                              <div className="admin-review-meta-line">
+                                <span className="admin-review-user">{item.user}</span>
+                                <span className="admin-review-meta-separator">•</span>
+                                <span>{formatRelativeTime(item.createdAt)}</span>
+                              </div>
                             </div>
 
                             <div className="admin-review-card-side">
-                              <span
-                                className={`admin-priority-pill ${getSubmissionPriorityTone(item)}`}
-                              >
-                                {index === 0 ? 'Najnovije' : getSubmissionPriorityLabel(item)}
-                              </span>
+                              <div className="admin-review-points-box">
+                                <small>XP</small>
+                                <strong>{item.points}</strong>
+                              </div>
                               <span className={`admin-status-pill ${item.status}`}>
                                 {getStatusLabel(item.status)}
                               </span>
-                              <strong>{item.points} XP</strong>
                             </div>
                           </div>
 
-                          <p className="admin-review-preview">
-                            {item.proposedAnswer
-                              ? `Predlozen odgovor: ${item.proposedAnswer}`
-                              : item.contentLines?.[0] || item.content}
-                          </p>
+                          <div className="admin-review-preview-box">
+                            {item.requestedAction ? (
+                              <small>Sta korisnik trazi</small>
+                            ) : (
+                              <small>Sazetak prijave</small>
+                            )}
+                            <p className="admin-review-preview">{getSubmissionCardPreview(item)}</p>
+                          </div>
 
                           {item.contentTarget ? (
                             <div className="admin-tag-row">
@@ -1358,7 +1393,9 @@ function AdminPage() {
                               onClick={() => handleSubmissionStatus(selectedSubmission.id, 'approved')}
                             >
                               {selectedSubmission.submissionKind === 'answer_review'
-                                ? 'Odobri odgovor'
+                                ? selectedSubmission.contentTarget
+                                  ? 'Odobri odgovor'
+                                  : 'Odobri prijedlog'
                                 : 'Odobri unos'}
                             </button>
 

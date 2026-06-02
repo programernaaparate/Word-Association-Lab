@@ -3,64 +3,104 @@ import {
   addGameHistory,
   addGameSubmission,
   getAuthToken,
+  getCurrentUser,
+  getDailyChallengeCompletionState,
   markDailyChallengeCompleted,
   saveCurrentUser,
   updateCurrentUserPoints,
 } from './storage'
 
+const normalizeDailyReplayLocally = (historyEntry = {}) => {
+  if (!historyEntry?.isDaily) {
+    return historyEntry
+  }
+
+  const currentUser = getCurrentUser()
+  const alreadyCompleted = getDailyChallengeCompletionState(
+    historyEntry.dailyDateKey,
+    currentUser?.id
+  )
+
+  if (!alreadyCompleted) {
+    return historyEntry
+  }
+
+  return {
+    ...historyEntry,
+    earnedPoints: 0,
+    awardedPoints: 0,
+    performanceBonus: 0,
+    comboBonus: 0,
+    dailyReward: 0,
+    dailyReplayBlocked: true,
+  }
+}
+
 export const syncCompletedGame = async ({ historyEntry, submission }) => {
   const token = getAuthToken()
+  const normalizedHistoryEntry = normalizeDailyReplayLocally(historyEntry)
   const fallbackPoints = Math.max(
     0,
-    Number(historyEntry?.awardedPoints ?? historyEntry?.earnedPoints ?? 0) || 0
+    Number(
+      normalizedHistoryEntry?.awardedPoints ??
+        normalizedHistoryEntry?.earnedPoints ??
+        0
+    ) || 0
   )
   const saveDailyCompletionLocally = (reward = 0) => {
-    if (!historyEntry?.isDaily || Number(reward || 0) <= 0) {
+    if (!normalizedHistoryEntry?.isDaily || Number(reward || 0) <= 0) {
       return
     }
 
     markDailyChallengeCompleted({
-      dateKey: historyEntry.dailyDateKey,
-      challengeId: historyEntry.dailyChallengeId || '',
+      dateKey: normalizedHistoryEntry.dailyDateKey,
+      challengeId: normalizedHistoryEntry.dailyChallengeId || '',
     })
   }
 
-  if (!token) {
-    addGameHistory(historyEntry)
+  const normalizedSubmission = submission
+    ? {
+        ...submission,
+        points: fallbackPoints,
+      }
+    : null
 
-    if (submission) {
-      addGameSubmission(submission)
+  if (!token) {
+    addGameHistory(normalizedHistoryEntry)
+
+    if (normalizedSubmission) {
+      addGameSubmission(normalizedSubmission)
     }
 
     const user = updateCurrentUserPoints(fallbackPoints)
-    saveDailyCompletionLocally(historyEntry?.dailyReward)
+    saveDailyCompletionLocally(normalizedHistoryEntry?.dailyReward)
     return {
-      historyEntry,
-      submission,
+      historyEntry: normalizedHistoryEntry,
+      submission: normalizedSubmission,
       user,
       synced: false,
     }
   }
 
   try {
-    const historyResponse = await saveHistoryEntryRequest(token, historyEntry)
+    const historyResponse = await saveHistoryEntryRequest(token, normalizedHistoryEntry)
     const syncedHistoryEntry = historyResponse.history
-      ? { ...historyEntry, ...historyResponse.history }
-      : historyEntry
+      ? { ...normalizedHistoryEntry, ...historyResponse.history }
+      : normalizedHistoryEntry
 
     addGameHistory(syncedHistoryEntry)
 
-    let syncedSubmission = submission || null
+    let syncedSubmission = normalizedSubmission || null
 
-    if (submission) {
+    if (normalizedSubmission) {
       const syncedSubmissionPayload = {
-        ...submission,
+        ...normalizedSubmission,
         points: Math.max(
           0,
           Number(
             syncedHistoryEntry.awardedPoints ??
               syncedHistoryEntry.earnedPoints ??
-              submission.points ??
+              normalizedSubmission.points ??
               0
           ) || 0
         ),
@@ -92,18 +132,18 @@ export const syncCompletedGame = async ({ historyEntry, submission }) => {
   } catch (error) {
     console.error('Game sync failed:', error)
 
-    addGameHistory(historyEntry)
+    addGameHistory(normalizedHistoryEntry)
 
-    if (submission) {
-      addGameSubmission(submission)
+    if (normalizedSubmission) {
+      addGameSubmission(normalizedSubmission)
     }
 
     const user = updateCurrentUserPoints(fallbackPoints)
-    saveDailyCompletionLocally(historyEntry?.dailyReward)
+    saveDailyCompletionLocally(normalizedHistoryEntry?.dailyReward)
 
     return {
-      historyEntry,
-      submission,
+      historyEntry: normalizedHistoryEntry,
+      submission: normalizedSubmission,
       user,
       synced: false,
     }

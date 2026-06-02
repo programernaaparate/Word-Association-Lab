@@ -26,6 +26,7 @@ function ResultsPage() {
   const partialCount = Math.max(0, Number(result?.partialCount ?? 0) || 0)
   const comboBonus = Math.max(0, Number(result?.comboBonus ?? 0) || 0)
   const maxCombo = Math.max(0, Number(result?.maxCombo ?? 0) || 0)
+  const dailyReplayBlocked = Boolean(result?.dailyReplayBlocked)
   const progressSnapshot = result?.progressSnapshot || {}
   const currentStreak = Math.max(0, Number(progressSnapshot.currentStreak ?? 0) || 0)
   const unlockedAchievementCount = Math.max(
@@ -50,14 +51,18 @@ function ResultsPage() {
   const hasSubmittedAnswer = answers.some(
     (item) => item.answer && item.answer.trim() && item.answer !== '(bez odgovora)'
   )
-  const resultTitle = hasAnyCorrectAnswer
+  const resultTitle = dailyReplayBlocked
+    ? 'Dnevni je vec iskoriscen'
+    : hasAnyCorrectAnswer
     ? 'Svaka cast!'
     : hasAnyPartialAnswer
       ? 'Blizu si'
-    : hasSubmittedAnswer
+      : hasSubmittedAnswer
       ? 'Pokusaj ponovo'
       : 'Nema unesenog odgovora'
-  const resultSubtitle = hasAnyCorrectAnswer
+  const resultSubtitle = dailyReplayBlocked
+    ? 'Ovaj dnevni izazov je vec ranije zavrsen, pa dodatni XP nije dodijeljen za tip igre:'
+    : hasAnyCorrectAnswer
     ? 'Zavrsio si tip igre:'
     : hasAnyPartialAnswer
       ? 'Odgovor je bio povezan, ali ne i najprecizniji za tip igre:'
@@ -338,6 +343,12 @@ function ResultsPage() {
               </div>
 
               <div className="profile-info-box">
+                {dailyReplayBlocked ? (
+                  <p>
+                    <strong>Napomena:</strong> Dnevni izazov je vec jednom zavrsen danas, pa je
+                    ovaj prolaz evidentiran bez novog XP-a.
+                  </p>
+                ) : null}
                 <p><strong>Kategorija:</strong> {category}</p>
                 <p><strong>Izabrana tezina:</strong> {difficulty}</p>
                 <p><strong>Tezinski bonus:</strong> x{difficultyMultiplier.toFixed(2)}</p>

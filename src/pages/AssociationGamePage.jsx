@@ -688,6 +688,7 @@ function AssociationGamePage() {
       newAchievements,
       dailyReward: finalHistoryEntry.dailyReward || 0,
       awardedPoints: finalHistoryEntry.awardedPoints ?? earnedPoints + fallbackDailyReward,
+      dailyReplayBlocked: finalHistoryEntry.dailyReplayBlocked || false,
     })
 
     playCelebrateSound()

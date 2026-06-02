@@ -547,6 +547,7 @@ function RelationGamePage() {
       isDaily: finalHistoryEntry.isDaily,
       dailyReward: finalHistoryEntry.dailyReward || 0,
       awardedPoints: finalHistoryEntry.awardedPoints ?? earnedPoints + fallbackDailyReward,
+      dailyReplayBlocked: finalHistoryEntry.dailyReplayBlocked || false,
     })
 
     if (isAccepted) {

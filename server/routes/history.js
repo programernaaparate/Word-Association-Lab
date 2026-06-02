@@ -148,7 +148,11 @@ router.post('/', requireAuth, async (req, res) => {
     try {
       await connection.beginTransaction()
 
+      let resolvedEarnedPoints = safeEarnedPoints
+      let resolvedPerformanceBonus = safePerformanceBonus
+      let resolvedComboBonus = safeComboBonus
       let resolvedDailyReward = Math.max(0, Number(dailyReward) || 0)
+      let dailyReplayBlocked = false
 
       if (isDaily) {
         const todayKey = getDateKey()
@@ -164,7 +168,7 @@ router.post('/', requireAuth, async (req, res) => {
           expectedChallenge.type === dailyContentType &&
           Number(expectedChallenge.contentId) === Number(dailyContentId)
 
-        if (matchesDailyChallenge && completedSuccessfully) {
+        if (matchesDailyChallenge) {
           const [completionRows] = await connection.execute(
             `SELECT id
              FROM daily_challenge_completions
@@ -173,7 +177,15 @@ router.post('/', requireAuth, async (req, res) => {
             [req.user.id, requestedDateKey]
           )
 
-          if (!completionRows.length) {
+          const hasCompletedDailyAlready = completionRows.length > 0
+
+          if (hasCompletedDailyAlready) {
+            dailyReplayBlocked = true
+            resolvedEarnedPoints = 0
+            resolvedPerformanceBonus = 0
+            resolvedComboBonus = 0
+            resolvedDailyReward = 0
+          } else if (completedSuccessfully) {
             resolvedDailyReward = DAILY_REWARD
 
             await connection.execute(
@@ -192,13 +204,16 @@ router.post('/', requireAuth, async (req, res) => {
             resolvedDailyReward = 0
           }
         } else {
+          resolvedEarnedPoints = 0
+          resolvedPerformanceBonus = 0
+          resolvedComboBonus = 0
           resolvedDailyReward = 0
         }
       } else {
         resolvedDailyReward = 0
       }
 
-      const finalAwardedPoints = safeEarnedPoints + resolvedDailyReward
+      const finalAwardedPoints = resolvedEarnedPoints + resolvedDailyReward
 
       const [insertResult] = await connection.execute(
         `INSERT INTO game_history
@@ -211,10 +226,10 @@ router.post('/', requireAuth, async (req, res) => {
           type,
           safeScore,
           safeBaseScore,
-          safeEarnedPoints,
+          resolvedEarnedPoints,
           finalAwardedPoints,
-          safePerformanceBonus,
-          safeComboBonus,
+          resolvedPerformanceBonus,
+          resolvedComboBonus,
           safeMaxCombo,
           safeTotal,
           safeCorrect,
@@ -271,7 +286,10 @@ router.post('/', requireAuth, async (req, res) => {
       await connection.commit()
 
       return res.status(201).json({
-        history: mapHistoryItem(historyRows[0]),
+        history: {
+          ...mapHistoryItem(historyRows[0]),
+          dailyReplayBlocked,
+        },
         user: updatedUser,
       })
     } catch (error) {
