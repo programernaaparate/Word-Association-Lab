@@ -71,12 +71,12 @@ function LeaderboardPage() {
               </div>
 
               <div className="mini-stat-card">
-                <small>TVOJ RANK</small>
+                <small>TVOJ PLASMAN</small>
                 <strong>{currentUserRank || '-'}</strong>
               </div>
 
               <div className="mini-stat-card">
-                <small>TOP SCORE</small>
+                <small>NAJBOLJI REZULTAT</small>
                 <strong>{topUsers[0]?.points ?? 0}</strong>
               </div>
             </div>

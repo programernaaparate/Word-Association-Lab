@@ -2,7 +2,11 @@
 import { useNavigate } from 'react-router-dom'
 import FirstRunTipCard from '../components/FirstRunTipCard'
 import Navbar from '../components/Navbar'
-import { getAssociationContentRequest } from '../utils/api'
+import {
+  createSubmissionRequest,
+  evaluateAiAssociationAnswerRequest,
+  getAssociationContentRequest,
+} from '../utils/api'
 import { syncCompletedGame } from '../utils/gameSync'
 import {
   calculateAssociationReward,
@@ -13,6 +17,7 @@ import {
   clearActiveSession,
   evaluateAssociationAnswer,
   getActiveSession,
+  getAuthToken,
   getAssociationWordsByDifficulty,
   getCategory,
   getCurrentUser,
@@ -101,6 +106,8 @@ const pickAssociationSessionWords = ({
 
 function AssociationGamePage() {
   const navigate = useNavigate()
+  const token = getAuthToken()
+  const aiEvaluationEnabled = import.meta.env.VITE_ENABLE_AI_EVALUATION === 'true'
   const activeSession = getActiveSession()
   const selectedDifficulty = getDifficulty()
   const selectedCategory = getCategory()
@@ -294,6 +301,9 @@ function AssociationGamePage() {
   const [comboBonusTotal, setComboBonusTotal] = useState(
     activeSession?.type === 'association' ? activeSession.comboBonusTotal || 0 : 0
   )
+  const [pendingReviewAnswer, setPendingReviewAnswer] = useState('')
+  const [isReviewSubmitting, setIsReviewSubmitting] = useState(false)
+  const [reviewFeedback, setReviewFeedback] = useState('')
   const [hintUsedSteps, setHintUsedSteps] = useState(
     activeSession?.type === 'association' ? activeSession.hintUsedSteps || [] : []
   )
@@ -426,11 +436,83 @@ function AssociationGamePage() {
     }))
   }
 
+  const handleSubmitAnswerForReview = async () => {
+    if (!token || !currentWord || !pendingReviewAnswer.trim() || isReviewSubmitting) {
+      return
+    }
+
+    try {
+      setIsReviewSubmitting(true)
+      setReviewFeedback('')
+
+      await createSubmissionRequest(token, {
+        gameType: 'Provjera asocijacije',
+        content: [
+          `Rjesenje: ${currentWord.word}`,
+          currentWord.symbol ? `Simbol: ${currentWord.symbol}` : '',
+          `Tragovi: ${currentClues.slice(0, revealedCount).join(', ')}`,
+          `Predlozen odgovor: ${pendingReviewAnswer.trim()}`,
+        ]
+          .filter(Boolean)
+          .join(' | '),
+        points: 0,
+        time: 0,
+        isDaily: isDailyMode,
+        submissionKind: 'answer_review',
+        contentType: 'association',
+        contentItemId: currentWord.id,
+        proposedAnswer: pendingReviewAnswer.trim(),
+      })
+
+      setReviewFeedback(
+        'Odgovor je poslat adminu na provjeru. Ako ga odobri, ubuduce ce prolaziti lokalno.'
+      )
+      setPendingReviewAnswer('')
+    } catch (requestError) {
+      setReviewFeedback(requestError.message || 'Slanje na provjeru trenutno nije uspjelo.')
+    } finally {
+      setIsReviewSubmitting(false)
+    }
+  }
+
   const handleNext = async ({ skip = false } = {}) => {
     if (!currentWord) return
 
     const trimmedAnswer = skip ? '' : answer.trim()
-    const evaluation = evaluateAssociationAnswer(currentWord, trimmedAnswer)
+    let evaluation = evaluateAssociationAnswer(currentWord, trimmedAnswer)
+    let isAccepted = evaluation.accepted
+    let aiRejectionReason = ''
+
+    if (!isAccepted && trimmedAnswer && token && aiEvaluationEnabled) {
+      try {
+        const aiEvaluation = await evaluateAiAssociationAnswerRequest(token, {
+          clues: currentClues.slice(0, revealedCount),
+          symbol: currentWord.symbol || '',
+          canonicalAnswer: currentWord.word,
+          acceptedAnswers: currentWord.acceptedAnswers || [],
+          submittedAnswer: trimmedAnswer,
+          category: currentWord.category,
+          difficulty: currentWord.difficulty || difficulty,
+          hint: currentWord.hint || '',
+        })
+
+        if (aiEvaluation.available && aiEvaluation.accepted) {
+          evaluation = {
+            ...evaluation,
+            accepted: true,
+            partialAccepted: false,
+            matchedAnswer: trimmedAnswer,
+            aiAccepted: true,
+            aiReason: aiEvaluation.reason || '',
+          }
+          isAccepted = true
+        } else if (aiEvaluation.available && aiEvaluation.reason) {
+          aiRejectionReason = aiEvaluation.reason
+        }
+      } catch {
+        // Local fallback remains active if AI is unavailable.
+      }
+    }
 
     let updatedScore = score
     let updatedCorrect = correct
@@ -439,7 +521,7 @@ function AssociationGamePage() {
     let updatedComboBonusTotal = comboBonusTotal
     let awardedComboBonus = 0
 
-    if (evaluation.accepted) {
+    if (isAccepted) {
       const comboState = resolveComboProgress({
         currentCombo: comboStreak,
         bestCombo,
@@ -466,7 +548,13 @@ function AssociationGamePage() {
       setScore(updatedScore)
       setWrongAttempts((prev) => prev + 1)
       setComboStreak(0)
-      setRoundFeedback(`Netacno: "${trimmedAnswer}". Pokusaj ponovo.`)
+      setPendingReviewAnswer(trimmedAnswer)
+      setReviewFeedback('')
+      setRoundFeedback(
+        aiRejectionReason
+          ? `Netacno: "${trimmedAnswer}". ${aiRejectionReason}`
+          : `Netacno: "${trimmedAnswer}". Pokusaj ponovo.`
+      )
       playErrorSound()
       return
     }
@@ -476,7 +564,7 @@ function AssociationGamePage() {
       {
         prompt: currentPromptLabel,
         answer: trimmedAnswer || '(bez odgovora)',
-        accepted: evaluation.accepted,
+        accepted: isAccepted,
         hintUsed: hintAlreadyUsedForCurrentStep,
         solution: currentWord.word,
         symbol: currentWord.symbol || '',
@@ -485,6 +573,8 @@ function AssociationGamePage() {
         roundDifficulty: currentWord.difficulty || difficulty,
         comboAfterRound: updatedComboStreak,
         comboBonusAwarded: awardedComboBonus,
+        aiAccepted: Boolean(evaluation.aiAccepted),
+        aiReason: evaluation.aiReason || '',
       },
     ]
 
@@ -495,9 +585,11 @@ function AssociationGamePage() {
     setBestCombo(updatedBestCombo)
     setComboBonusTotal(updatedComboBonusTotal)
     setRoundFeedback('')
+    setPendingReviewAnswer('')
+    setReviewFeedback('')
 
     if (index < gameWords.length - 1) {
-      if (evaluation.accepted) {
+      if (isAccepted) {
         playSuccessSound()
       }
       const nextIndex = index + 1
@@ -626,12 +718,12 @@ function AssociationGamePage() {
             description="Najvise XP uzimas kad pogodis sa sto manje otvorenih tragova i bez pomoci."
             items={[
               'Prvo probaj bez pomoci, pa tek onda otvori novi trag.',
-              'Hint i reveal cuvaj za zadnje 1-2 dileme.',
+              'Pomoc i otvaranje tragova cuvaj za poslednje 1-2 dileme.',
             ]}
             tone="green"
           />
 
-          <div className="section-row">
+            <div className="section-row">
             <h2 className="logic-title">Pogodi konacno rjesenje</h2>
             <span className="tag blue-pill">
               {Math.max(1, index + 1)} / {gameWords.length}
@@ -659,9 +751,9 @@ function AssociationGamePage() {
           <div className="profile-info-box">
             <p><strong>Otkriveno tragova:</strong> {revealedCount} / {currentClues.length}</p>
             <p><strong>Bodovanje:</strong> manje otvorenih tragova donosi vise poena.</p>
-            <p><strong>Aktivni combo:</strong> {comboStreak > 0 ? `x${comboStreak}` : 'Nema'}</p>
-            <p><strong>Najbolji combo:</strong> x{bestCombo}</p>
-            <p><strong>Combo bonus:</strong> +{comboBonusTotal} XP</p>
+            <p><strong>Aktivna serija:</strong> {comboStreak > 0 ? `x${comboStreak}` : 'Nema'}</p>
+            <p><strong>Najbolja serija:</strong> x{bestCombo}</p>
+            <p><strong>Bonus za seriju:</strong> +{comboBonusTotal} XP</p>
           </div>
 
           <label htmlFor="association-answer">Konacno rjesenje</label>
@@ -676,11 +768,26 @@ function AssociationGamePage() {
               if (roundFeedback) {
                 setRoundFeedback('')
               }
+              if (reviewFeedback) {
+                setReviewFeedback('')
+              }
               setAnswer(event.target.value)
             }}
           />
 
           {roundFeedback ? <p className="error game-inline-feedback">{roundFeedback}</p> : null}
+          {reviewFeedback ? <p className="muted small-text">{reviewFeedback}</p> : null}
+
+          {pendingReviewAnswer ? (
+            <button
+              className="secondary-btn full-btn"
+              type="button"
+              onClick={handleSubmitAnswerForReview}
+              disabled={isReviewSubmitting}
+            >
+              {isReviewSubmitting ? 'Slanje adminu...' : 'Posalji odgovor adminu na provjeru'}
+            </button>
+          ) : null}
 
           {showHint && (
             <p className="muted small-text">

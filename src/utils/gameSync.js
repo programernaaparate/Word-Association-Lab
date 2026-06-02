@@ -53,10 +53,25 @@ export const syncCompletedGame = async ({ historyEntry, submission }) => {
     let syncedSubmission = submission || null
 
     if (submission) {
-      const submissionResponse = await createSubmissionRequest(token, submission)
+      const syncedSubmissionPayload = {
+        ...submission,
+        points: Math.max(
+          0,
+          Number(
+            syncedHistoryEntry.awardedPoints ??
+              syncedHistoryEntry.earnedPoints ??
+              submission.points ??
+              0
+          ) || 0
+        ),
+      }
+      const submissionResponse = await createSubmissionRequest(
+        token,
+        syncedSubmissionPayload
+      )
       syncedSubmission = submissionResponse.item
-        ? { ...submission, ...submissionResponse.item }
-        : submission
+        ? { ...syncedSubmissionPayload, ...submissionResponse.item }
+        : syncedSubmissionPayload
       addGameSubmission(syncedSubmission)
     }
 

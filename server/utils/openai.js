@@ -117,6 +117,47 @@ export const evaluateConceptAnswerWithAi = async ({
   })
 }
 
+export const evaluateAssociationAnswerWithAi = async ({
+  clues = [],
+  symbol = '',
+  canonicalAnswer = '',
+  acceptedAnswers = [],
+  submittedAnswer = '',
+  category = '',
+  difficulty = '',
+  hint = '',
+} = {}) => {
+  return createStructuredOpenAiResponse({
+    schemaName: 'association_answer_evaluation',
+    instructions:
+      'Ti procjenjujes odgovore za igru "Asocijacije". Prihvati odgovor samo ako zaista predstavlja isto ili vrlo blisko konacno rjesenje kao ciljna rijec: sinonim, uobicajenu varijaciju, standardni naziv ili jasno isto znacenje. Odbij sire kategorije, labavo povezane pojmove i pogadjanja koja nisu gotovo isto rjesenje. Vrati samo JSON po zadatoj semi.',
+    input: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'input_text',
+            text: [
+              'Procijeni da li je uneseni odgovor prihvatljiv za asocijaciju.',
+              `Otvoreni tragovi: ${clues.join(', ') || 'nema'}`,
+              `Pocetni simbol: ${symbol || 'nije zadat'}`,
+              `Kanonski odgovor: ${canonicalAnswer || 'nije zadat'}`,
+              `Dodatno prihvaceni odgovori: ${
+                acceptedAnswers.length ? acceptedAnswers.join(', ') : 'nema'
+              }`,
+              `Hint: ${hint || 'nije zadat'}`,
+              `Kategorija: ${category || 'nije zadato'}`,
+              `Tezina: ${difficulty || 'nije zadato'}`,
+              `Uneseni odgovor: ${submittedAnswer}`,
+              'Prihvati samo ako odgovor prirodno predstavlja isto konacno rjesenje, ne samo istu oblast.',
+            ].join('\n'),
+          },
+        ],
+      },
+    ],
+  })
+}
+
 export const evaluateWordChainNodeWithAi = async ({
   centerWord = '',
   candidateWord = '',

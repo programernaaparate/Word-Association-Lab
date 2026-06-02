@@ -1,5 +1,5 @@
 const GOOGLE_SCRIPT_ID = 'google-identity-services-script'
-const GOOGLE_SCRIPT_SRC = 'https://accounts.google.com/gsi/client'
+const GOOGLE_SCRIPT_SRC = 'https://accounts.google.com/gsi/client?hl=sr'
 
 let googleScriptPromise = null
 

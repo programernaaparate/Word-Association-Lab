@@ -61,6 +61,9 @@ CREATE TABLE IF NOT EXISTS game_history (
   base_score INT NULL,
   earned_points INT NOT NULL DEFAULT 0,
   awarded_points INT NOT NULL DEFAULT 0,
+  performance_bonus INT NOT NULL DEFAULT 0,
+  combo_bonus INT NOT NULL DEFAULT 0,
+  max_combo INT NOT NULL DEFAULT 0,
   total INT NOT NULL DEFAULT 0,
   correct INT NOT NULL DEFAULT 0,
   accuracy INT NOT NULL DEFAULT 0,
@@ -68,6 +71,8 @@ CREATE TABLE IF NOT EXISTS game_history (
   category VARCHAR(80) NULL,
   difficulty VARCHAR(40) NULL,
   hint_count INT NOT NULL DEFAULT 0,
+  wrong_attempts INT NOT NULL DEFAULT 0,
+  partial_count INT NOT NULL DEFAULT 0,
   is_daily TINYINT(1) NOT NULL DEFAULT 0,
   daily_reward INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -83,6 +88,10 @@ CREATE TABLE IF NOT EXISTS game_submissions (
   time_seconds INT NOT NULL DEFAULT 0,
   status ENUM('pending', 'approved', 'flagged') NOT NULL DEFAULT 'pending',
   is_daily TINYINT(1) NOT NULL DEFAULT 0,
+  submission_kind VARCHAR(30) NOT NULL DEFAULT 'game',
+  content_type VARCHAR(30) NULL,
+  content_item_id INT NULL,
+  proposed_answer VARCHAR(255) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

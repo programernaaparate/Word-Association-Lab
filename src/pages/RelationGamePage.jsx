@@ -577,12 +577,12 @@ function RelationGamePage() {
 
           <FirstRunTipCard
             storageKey="relation"
-            eyebrow="Brzi onboarding"
+            eyebrow="Brzi uvod"
             title="Vjeruj prvom smislenom odnosu"
             description="Ako oba pojma zvuce kao isti pravac znacenja, najcesce je sinonim. Ako se sudaraju, idi na antonim."
             items={[
               'Asocijacija je za logicnu vezu, ne za isto znacenje.',
-              'Hint koristi kad su i sinonim i asocijacija podjednako moguci.',
+              'Pomoc koristi kad su i sinonim i asocijacija podjednako moguci.',
             ]}
             tone="amber"
           />
@@ -607,7 +607,7 @@ function RelationGamePage() {
             </div>
 
             <div className="stat-pill">
-              <span>COMBO</span>
+              <span>SERIJA</span>
               <div>
                 <small>NAJBOLJI</small>
                 <strong>{comboStreak > 0 ? `x${comboStreak}` : `x${bestCombo}`}</strong>
@@ -651,7 +651,7 @@ function RelationGamePage() {
             </p>
           )}
 
-          <p className="muted small-text">Combo bonus do sada: +{comboBonusTotal} XP</p>
+          <p className="muted small-text">Bonus za seriju do sada: +{comboBonusTotal} XP</p>
 
           <div className="dual-actions">
             <button

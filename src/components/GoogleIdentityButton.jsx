@@ -55,6 +55,7 @@ function GoogleIdentityButton({
           size: 'large',
           shape: 'pill',
           text: 'continue_with',
+          locale: 'sr',
           logo_alignment: 'center',
           width: containerRef.current.offsetWidth || 108,
         })

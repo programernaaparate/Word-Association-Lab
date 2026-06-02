@@ -569,10 +569,10 @@ function LogicChallengePage() {
     setShowHint(true)
   }
 
-  const handleNext = async () => {
+  const handleNext = async ({ skip = false } = {}) => {
     if (!currentChallenge) return
 
-    const trimmedAnswer = answer.trim()
+    const trimmedAnswer = skip ? '' : answer.trim()
     let evaluation = evaluateLogicAnswer(currentChallenge, trimmedAnswer)
     let isAccepted = evaluation.accepted
     let isPartialAccepted = Boolean(evaluation.partialAccepted)
@@ -821,7 +821,7 @@ function LogicChallengePage() {
 
           <FirstRunTipCard
             storageKey="logic"
-            eyebrow="Brzi onboarding"
+            eyebrow="Brzi uvod"
             title="Trazi zajednicku logiku, ne samo slicne rijeci"
             description="Najbolje prolaze odgovori koji opisuju grupu, funkciju ili osobinu koja spaja pojmove."
             items={[
@@ -832,7 +832,7 @@ function LogicChallengePage() {
 
           <div className="stat-row">
             <div className="stat-pill">
-              <span>TIME</span>
+              <span>VRIJEME</span>
               <div>
                 <small>RUNDA</small>
                 <strong>
@@ -850,7 +850,7 @@ function LogicChallengePage() {
             </div>
 
             <div className="stat-pill">
-              <span>COMBO</span>
+              <span>SERIJA</span>
               <div>
                 <small>NAJBOLJI</small>
                 <strong>{comboStreak > 0 ? `x${comboStreak}` : `x${bestCombo}`}</strong>
@@ -894,7 +894,7 @@ function LogicChallengePage() {
                     : 'Razmisli o jednoj grupi, oblasti ili pojmu koji sve spaja.'}
               </p>
               <p className="muted small-text">
-                Combo bonus do sada: +{comboBonusTotal} XP
+                Bonus za seriju do sada: +{comboBonusTotal} XP
               </p>
             </div>
 
@@ -969,16 +969,26 @@ function LogicChallengePage() {
           <p className="muted small-text">
             {isOddOneOut
               ? `Klik na pogresnu karticu skida ${WRONG_ANSWER_PENALTY} XP kada potvrdis odgovor.`
-              : `Hint se u jednoj rundi racuna samo prvi put i skida ${HINT_PENALTY} XP.`}
+              : `Pomoc se u jednoj rundi racuna samo prvi put i skida ${HINT_PENALTY} XP.`}
           </p>
 
           <button
             className="primary-btn full-btn"
-            onClick={handleNext}
+            onClick={() => handleNext()}
             type="button"
             disabled={!canSubmit}
           >
             {index === gameChallenges.length - 1 ? 'Zavrsi izazov' : 'Potvrdi odgovor'}
+          </button>
+
+          <button
+            className="secondary-btn full-btn"
+            onClick={() => handleNext({ skip: true })}
+            type="button"
+          >
+            {index === gameChallenges.length - 1
+              ? 'Ne znam, zavrsi izazov'
+              : 'Ne znam, preskoci'}
           </button>
         </div>
 

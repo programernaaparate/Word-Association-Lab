@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
 import {
+  evaluateAssociationAnswerWithAi,
   evaluateConceptAnswerWithAi,
   evaluateWordChainNodeWithAi,
   hasOpenAiAccess,
@@ -42,6 +43,54 @@ const buildAiUnavailableResponse = (error) => {
     reason: 'AI evaluacija trenutno nije dostupna. Pokusaj ponovo kasnije.',
   }
 }
+
+router.post('/association-answer', requireAuth, async (req, res) => {
+  const {
+    clues,
+    symbol,
+    canonicalAnswer,
+    acceptedAnswers,
+    submittedAnswer,
+    category,
+    difficulty,
+    hint,
+  } = req.body || {}
+
+  if (!Array.isArray(clues) || !String(submittedAnswer || '').trim()) {
+    return res.status(400).json({ message: 'Nedostaju podaci za AI procjenu asocijacije.' })
+  }
+
+  if (!hasOpenAiAccess()) {
+    return res.json({
+      available: false,
+      accepted: false,
+      confidence: 0,
+      reason: 'AI evaluacija nije ukljucena na serveru.',
+    })
+  }
+
+  try {
+    const result = await evaluateAssociationAnswerWithAi({
+      clues,
+      symbol,
+      canonicalAnswer,
+      acceptedAnswers: Array.isArray(acceptedAnswers) ? acceptedAnswers : [],
+      submittedAnswer,
+      category,
+      difficulty,
+      hint,
+    })
+
+    return res.json({
+      available: true,
+      accepted: Boolean(result.accepted),
+      confidence: Number(result.confidence || 0),
+      reason: result.reason || '',
+    })
+  } catch (error) {
+    return res.json(buildAiUnavailableResponse(error))
+  }
+})
 
 router.post('/concept-answer', requireAuth, async (req, res) => {
   const { words, canonicalAnswer, submittedAnswer, category, difficulty } = req.body || {}

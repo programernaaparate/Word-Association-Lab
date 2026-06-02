@@ -3,61 +3,25 @@ import BottomNav from '../components/BottomNav'
 import Navbar from '../components/Navbar'
 import { getCurrentUserRequest, getMyHistoryRequest } from '../utils/api'
 import {
+  buildHistorySummary,
+  mergeRemoteHistoryWithLocal,
+  persistMergedHistory,
+} from '../utils/historySync'
+import {
   calculateLevelFromPoints,
   getAuthToken,
   getCurrentUser,
-  getCurrentUserGameHistory,
   getLevelProgress,
-  getPlayerProgressOverview,
   saveCurrentUser,
 } from '../utils/storage'
-
-const getHistoryPoints = (history) =>
-  history.reduce(
-    (sum, item) => sum + Math.max(0, Number(item.awardedPoints ?? item.earnedPoints ?? 0) || 0),
-    0
-  )
-
-const getHistoryKey = (item) =>
-  [
-    item?.id || 'local',
-    item?.type || '',
-    item?.createdAt || '',
-    item?.score || '',
-    item?.total || '',
-    item?.correct || '',
-  ].join('-')
-
-const mergeHistoryLists = (remoteHistory = []) => {
-  const localHistory = getCurrentUserGameHistory()
-  const mergedMap = new Map()
-
-  ;[...(remoteHistory || []), ...localHistory].forEach((item) => {
-    const itemKey = getHistoryKey(item)
-    if (!mergedMap.has(itemKey)) {
-      mergedMap.set(itemKey, item)
-    }
-  })
-
-  return Array.from(mergedMap.values()).sort(
-    (leftItem, rightItem) => new Date(rightItem.createdAt || 0) - new Date(leftItem.createdAt || 0)
-  )
-}
-
-const buildHistorySummary = (history = []) => {
-  const overview = getPlayerProgressOverview(history)
-
-  return {
-    ...overview,
-    totalPoints: Math.max(overview.totalPoints, getHistoryPoints(history)),
-  }
-}
 
 function HistoryPage() {
   const token = getAuthToken()
   const [currentUser, setCurrentUser] = useState(() => getCurrentUser())
-  const [history, setHistory] = useState(() => mergeHistoryLists([]))
-  const [summary, setSummary] = useState(() => buildHistorySummary(mergeHistoryLists([])))
+  const [history, setHistory] = useState(() => mergeRemoteHistoryWithLocal([]))
+  const [summary, setSummary] = useState(() =>
+    buildHistorySummary(mergeRemoteHistoryWithLocal([]))
+  )
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(Boolean(token))
 
@@ -78,29 +42,21 @@ function HistoryPage() {
         if (!isMounted) return
 
         const remoteHistory = historyResponse.items || []
-        const mergedHistory = mergeHistoryLists(remoteHistory)
+        const mergedHistory = mergeRemoteHistoryWithLocal(remoteHistory)
         const localUser = getCurrentUser()
-        const fallbackSummary = buildHistorySummary(mergedHistory)
-        const remoteSummary = historyResponse.summary || null
-        const nextSummary =
-          remoteSummary && mergedHistory.length === remoteHistory.length
-            ? {
-                ...fallbackSummary,
-                ...remoteSummary,
-              }
-            : fallbackSummary
-        const historyPoints = nextSummary.totalPoints
+        const nextSummary = buildHistorySummary(mergedHistory, historyResponse.summary || null)
         const nextUser = {
           ...(localUser || {}),
           ...(userResponse.user || {}),
-          points: Math.max(
-            Number(userResponse.user?.points || 0),
-            Number(localUser?.points || 0),
-            historyPoints
-          ),
         }
 
+        nextUser.points = Math.max(
+          0,
+          Number(userResponse.user?.points ?? nextUser.points ?? nextSummary.totalPoints ?? 0) || 0
+        )
         nextUser.level = calculateLevelFromPoints(nextUser.points)
+
+        persistMergedHistory(mergedHistory)
         saveCurrentUser(nextUser)
         setCurrentUser(nextUser)
         setHistory(mergedHistory)
@@ -108,7 +64,7 @@ function HistoryPage() {
       } catch (requestError) {
         if (!isMounted) return
 
-        const localHistory = mergeHistoryLists([])
+        const localHistory = mergeRemoteHistoryWithLocal([])
         setHistory(localHistory)
         setSummary(buildHistorySummary(localHistory))
         setError(
@@ -130,7 +86,10 @@ function HistoryPage() {
     }
   }, [token])
 
-  const displayPoints = Math.max(Number(currentUser?.points || 0), summary.totalPoints)
+  const displayPoints = Math.max(
+    0,
+    Number(currentUser?.points ?? summary.totalPoints ?? 0) || 0
+  )
   const levelProgress = getLevelProgress(displayPoints)
 
   const formatType = (type) => {
@@ -188,7 +147,7 @@ function HistoryPage() {
 
             <div className="mini-stats-grid">
               <div className="mini-stat-card">
-                <small>BEST XP</small>
+                <small>NAJBOLJI XP</small>
                 <strong>{summary.bestScore}</strong>
               </div>
 
@@ -207,8 +166,8 @@ function HistoryPage() {
               <p><strong>Dnevni izazovi:</strong> {summary.completedDaily}</p>
               <p><strong>Nivo:</strong> {levelProgress.level}</p>
               <p><strong>Do sledeceg nivoa:</strong> {levelProgress.remainingXp} XP</p>
-              <p><strong>Aktivni streak:</strong> {summary.currentStreak} dana</p>
-              <p><strong>Najbolji combo:</strong> {summary.bestCombo > 0 ? `x${summary.bestCombo}` : 'Nema'}</p>
+              <p><strong>Aktivni niz:</strong> {summary.currentStreak} dana</p>
+              <p><strong>Najbolja serija:</strong> {summary.bestCombo > 0 ? `x${summary.bestCombo}` : 'Nema'}</p>
             </div>
           </div>
 
@@ -230,7 +189,7 @@ function HistoryPage() {
                       <div>
                         <strong>
                           {formatType(item.type)}
-                          {item.isDaily ? ' / Daily' : ''}
+                          {item.isDaily ? ' / Dnevni izazov' : ''}
                         </strong>
                         <p>
                           {item.correct}/{item.total} / {item.accuracy}% / {formatTime(item.time)}

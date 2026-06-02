@@ -254,7 +254,7 @@ FROM (
   UNION ALL SELECT 'Orbita' AS word, '' AS symbol, 'Nauka' AS category, 'Lako' AS difficulty, '["Planeta","Kretanje","Krug","Svemir"]' AS clues_json, 'Putanja kojom se tijelo krece oko drugog tijela.' AS hint, '["orbita"]' AS accepted_answers_json
   UNION ALL SELECT 'Genetika' AS word, '' AS symbol, 'Nauka' AS category, 'Srednje' AS difficulty, '["Nasljedje","DNK","Osobine","Geni"]' AS clues_json, 'Oblast koja proucava nasljedne osobine zivih bica.' AS hint, '["genetika"]' AS accepted_answers_json
   UNION ALL SELECT 'Fosil' AS word, '' AS symbol, 'Nauka' AS category, 'Srednje' AS difficulty, '["Kamen","Ostatak","Proslost","Nalaz"]' AS clues_json, 'Ocuvani ostatak ili trag davnog zivog bica.' AS hint, '["fosil"]' AS accepted_answers_json
-  UNION ALL SELECT 'Hormon' AS word, '' AS symbol, 'Nauka' AS category, 'Tesko' AS difficulty, '["Organizam","Signal","Zlijezda","Ravnoteza"]' AS clues_json, 'Hemijski glasnik koji regulise mnoge procese u tijelu.' AS hint, '["hormon"]' AS accepted_answers_json
+  UNION ALL SELECT 'Hormon' AS word, '' AS symbol, 'Nauka' AS category, 'Tesko' AS difficulty, '["Organizam","Signal","Zlijezda","Ravnoteza"]' AS clues_json, 'Hemijski signal koji upravlja mnogim procesima u tijelu.' AS hint, '["hormon"]' AS accepted_answers_json
 ) AS seed
 LEFT JOIN association_words existing ON LOWER(existing.word) = LOWER(seed.word)
 WHERE existing.id IS NULL;
@@ -569,7 +569,7 @@ FROM (
   UNION ALL SELECT 'concept' AS mode, '["Planeta","Kretanje","Krug"]' AS words_json, 'Orbita' AS answer, 'Putanja kojom se tijelo krece oko drugog tijela.' AS hint, 'Nauka' AS category, 'Lako' AS difficulty
   UNION ALL SELECT 'concept' AS mode, '["Nasljedje","DNK","Osobine"]' AS words_json, 'Genetika' AS answer, 'Oblast koja proucava nasljedne osobine zivih bica.' AS hint, 'Nauka' AS category, 'Srednje' AS difficulty
   UNION ALL SELECT 'concept' AS mode, '["Kamen","Ostatak","Proslost"]' AS words_json, 'Fosil' AS answer, 'Ocuvani ostatak ili trag davnog zivog bica.' AS hint, 'Nauka' AS category, 'Srednje' AS difficulty
-  UNION ALL SELECT 'concept' AS mode, '["Organizam","Signal","Zlijezda"]' AS words_json, 'Hormon' AS answer, 'Hemijski glasnik koji regulise mnoge procese u tijelu.' AS hint, 'Nauka' AS category, 'Tesko' AS difficulty
+  UNION ALL SELECT 'concept' AS mode, '["Organizam","Signal","Zlijezda"]' AS words_json, 'Hormon' AS answer, 'Hemijski signal koji upravlja mnogim procesima u tijelu.' AS hint, 'Nauka' AS category, 'Tesko' AS difficulty
   UNION ALL SELECT 'concept' AS mode, '["Vrijeme","Prognoza","Oblaci"]' AS words_json, 'Meteorologija' AS answer, 'Nauka koja proucava vrijeme i atmosferu.' AS hint, 'Nauka' AS category, 'Tesko' AS difficulty
   UNION ALL SELECT 'concept' AS mode, '["Ploce","Zemljotres","Pomjeranje"]' AS words_json, 'Tektonika' AS answer, 'Proucavanje kretanja i sudara velikih djelova Zemljine kore.' AS hint, 'Nauka' AS category, 'Tesko' AS difficulty
   UNION ALL SELECT 'concept' AS mode, '["Rukavice","Ring","Udarac"]' AS words_json, 'Boks' AS answer, 'Borilacki sport u kojem se protivnici nadmecu udarcima rukama.' AS hint, 'Sport' AS category, 'Lako' AS difficulty

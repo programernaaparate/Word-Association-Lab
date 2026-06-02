@@ -360,6 +360,15 @@ export const evaluateAiConceptAnswerRequest = (token, payload) =>
     body: JSON.stringify(payload),
   })
 
+export const evaluateAiAssociationAnswerRequest = (token, payload) =>
+  apiRequest('/ai/association-answer', {
+    method: 'POST',
+    headers: {
+      ...withAuth(token),
+    },
+    body: JSON.stringify(payload),
+  })
+
 export const evaluateAiWordChainNodeRequest = (token, payload) =>
   apiRequest('/ai/word-chain-node', {
     method: 'POST',

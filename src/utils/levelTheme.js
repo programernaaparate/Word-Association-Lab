@@ -29,7 +29,7 @@ export const getLevelTheme = (level = 1) => {
 
   return {
     tier: 'rookie',
-    title: 'Lab istrazivac',
+    title: 'Laboratorijski istrazivac',
     accentLabel: 'Pocetna faza',
   }
 }

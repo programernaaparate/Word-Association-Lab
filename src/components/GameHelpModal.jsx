@@ -3,6 +3,7 @@ import AppIcon from './AppIcon'
 
 function GameHelpModal({
   open = false,
+  eyebrow = 'Kako se igra',
   title = '',
   subtitle = '',
   sections = [],
@@ -39,10 +40,10 @@ function GameHelpModal({
         aria-modal="true"
         aria-labelledby="game-help-modal-title"
         onClick={(event) => event.stopPropagation()}
-      >
+        >
         <div className="help-modal-header">
           <div>
-            <small>Kako se igra</small>
+            <small>{eyebrow}</small>
             <h2 id="game-help-modal-title">{title}</h2>
             {subtitle ? <p>{subtitle}</p> : null}
           </div>

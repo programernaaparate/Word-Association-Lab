@@ -607,7 +607,7 @@ function WordChainPage() {
 
           <FirstRunTipCard
             storageKey="word-chain"
-            eyebrow="Brzi onboarding"
+            eyebrow="Brzi uvod"
             title="Mijesaj sva 3 tipa veze"
             description="Najjaci lanac nije samo dug, nego i izbalansiran: barem jedan sinonim, jedan antonim i jedna asocijacija."
             items={[

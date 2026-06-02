@@ -2,6 +2,13 @@ import { getPool } from '../config/db.js'
 
 export const runMigrations = async () => {
   const pool = getPool()
+  const associationAcceptedAnswersBackfill = [['Dubler', ['kaskader']]]
+  const associationHintBackfill = [
+    ['Hormon', 'Hemijski signal koji upravlja mnogim procesima u tijelu.'],
+  ]
+  const logicHintBackfill = [
+    ['Hormon', 'Hemijski signal koji upravlja mnogim procesima u tijelu.'],
+  ]
   const associationSymbolBackfill = [
     ['Sunce', '☀️'],
     ['More', '🌊'],
@@ -28,6 +35,33 @@ export const runMigrations = async () => {
   )
   const [associationSymbolColumns] = await pool.query(
     "SHOW COLUMNS FROM association_words LIKE 'symbol'"
+  )
+  const [submissionKindColumns] = await pool.query(
+    "SHOW COLUMNS FROM game_submissions LIKE 'submission_kind'"
+  )
+  const [submissionContentTypeColumns] = await pool.query(
+    "SHOW COLUMNS FROM game_submissions LIKE 'content_type'"
+  )
+  const [submissionContentItemIdColumns] = await pool.query(
+    "SHOW COLUMNS FROM game_submissions LIKE 'content_item_id'"
+  )
+  const [submissionProposedAnswerColumns] = await pool.query(
+    "SHOW COLUMNS FROM game_submissions LIKE 'proposed_answer'"
+  )
+  const [historyPerformanceBonusColumns] = await pool.query(
+    "SHOW COLUMNS FROM game_history LIKE 'performance_bonus'"
+  )
+  const [historyComboBonusColumns] = await pool.query(
+    "SHOW COLUMNS FROM game_history LIKE 'combo_bonus'"
+  )
+  const [historyMaxComboColumns] = await pool.query(
+    "SHOW COLUMNS FROM game_history LIKE 'max_combo'"
+  )
+  const [historyWrongAttemptsColumns] = await pool.query(
+    "SHOW COLUMNS FROM game_history LIKE 'wrong_attempts'"
+  )
+  const [historyPartialCountColumns] = await pool.query(
+    "SHOW COLUMNS FROM game_history LIKE 'partial_count'"
   )
 
   if (!userResetColumns.length) {
@@ -72,12 +106,130 @@ export const runMigrations = async () => {
     )
   }
 
+  if (!submissionKindColumns.length) {
+    await pool.query(
+      "ALTER TABLE game_submissions ADD COLUMN submission_kind VARCHAR(30) NOT NULL DEFAULT 'game' AFTER is_daily"
+    )
+  }
+
+  if (!submissionContentTypeColumns.length) {
+    await pool.query(
+      "ALTER TABLE game_submissions ADD COLUMN content_type VARCHAR(30) NULL AFTER submission_kind"
+    )
+  }
+
+  if (!submissionContentItemIdColumns.length) {
+    await pool.query(
+      'ALTER TABLE game_submissions ADD COLUMN content_item_id INT NULL AFTER content_type'
+    )
+  }
+
+  if (!submissionProposedAnswerColumns.length) {
+    await pool.query(
+      'ALTER TABLE game_submissions ADD COLUMN proposed_answer VARCHAR(255) NULL AFTER content_item_id'
+    )
+  }
+
+  if (!historyPerformanceBonusColumns.length) {
+    await pool.query(
+      'ALTER TABLE game_history ADD COLUMN performance_bonus INT NOT NULL DEFAULT 0 AFTER awarded_points'
+    )
+  }
+
+  if (!historyComboBonusColumns.length) {
+    await pool.query(
+      'ALTER TABLE game_history ADD COLUMN combo_bonus INT NOT NULL DEFAULT 0 AFTER performance_bonus'
+    )
+  }
+
+  if (!historyMaxComboColumns.length) {
+    await pool.query(
+      'ALTER TABLE game_history ADD COLUMN max_combo INT NOT NULL DEFAULT 0 AFTER combo_bonus'
+    )
+  }
+
+  if (!historyWrongAttemptsColumns.length) {
+    await pool.query(
+      'ALTER TABLE game_history ADD COLUMN wrong_attempts INT NOT NULL DEFAULT 0 AFTER hint_count'
+    )
+  }
+
+  if (!historyPartialCountColumns.length) {
+    await pool.query(
+      'ALTER TABLE game_history ADD COLUMN partial_count INT NOT NULL DEFAULT 0 AFTER wrong_attempts'
+    )
+  }
+
   for (const [word, symbol] of associationSymbolBackfill) {
     await pool.query(
       'UPDATE association_words SET symbol = ? WHERE LOWER(word) = LOWER(?) AND (symbol IS NULL OR symbol = \'\')',
       [symbol, word]
     )
   }
+
+  for (const [word, answersToAdd] of associationAcceptedAnswersBackfill) {
+    const [rows] = await pool.query(
+      'SELECT id, accepted_answers_json FROM association_words WHERE LOWER(word) = LOWER(?)',
+      [word]
+    )
+
+    for (const row of rows) {
+      let acceptedAnswers = []
+
+      try {
+        acceptedAnswers = Array.isArray(row.accepted_answers_json)
+          ? row.accepted_answers_json
+          : JSON.parse(String(row.accepted_answers_json || '[]'))
+      } catch {
+        acceptedAnswers = []
+      }
+
+      const nextAcceptedAnswers = [...acceptedAnswers]
+
+      answersToAdd.forEach((answer) => {
+        const alreadyExists = nextAcceptedAnswers.some(
+          (item) => String(item || '').trim().toLowerCase() === String(answer).toLowerCase()
+        )
+
+        if (!alreadyExists) {
+          nextAcceptedAnswers.push(answer)
+        }
+      })
+
+      if (nextAcceptedAnswers.length !== acceptedAnswers.length) {
+        await pool.query(
+          'UPDATE association_words SET accepted_answers_json = ? WHERE id = ?',
+          [JSON.stringify(nextAcceptedAnswers), row.id]
+        )
+      }
+    }
+  }
+
+  for (const [word, hint] of associationHintBackfill) {
+    await pool.query(
+      'UPDATE association_words SET hint = ? WHERE LOWER(word) = LOWER(?)',
+      [hint, word]
+    )
+  }
+
+  for (const [answer, hint] of logicHintBackfill) {
+    await pool.query(
+      'UPDATE logic_challenges SET hint = ? WHERE LOWER(answer) = LOWER(?)',
+      [hint, answer]
+    )
+  }
+
+  await pool.query(
+    `UPDATE users u
+     LEFT JOIN (
+       SELECT user_id, COALESCE(SUM(awarded_points), 0) AS total_points
+       FROM game_history
+       GROUP BY user_id
+     ) history_totals ON history_totals.user_id = u.id
+     SET u.points = COALESCE(history_totals.total_points, 0),
+         u.level = FLOOR(COALESCE(history_totals.total_points, 0) / 1000) + 1
+     WHERE u.role <> 'admin'`
+  )
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS daily_challenge_completions (

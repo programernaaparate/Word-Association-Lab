@@ -232,7 +232,7 @@ export const buildResultBadges = (result = {}) => {
   }
 
   if (result.isDaily && normalizeNumber(result.dailyReward) > 0) {
-    badges.push({ key: 'daily', label: 'Daily heroj', tone: 'teal' })
+    badges.push({ key: 'daily', label: 'Heroj dana', tone: 'teal' })
   }
 
   if (awardedPoints >= 150) {
@@ -244,7 +244,7 @@ export const buildResultBadges = (result = {}) => {
   }
 
   if (maxCombo >= 3) {
-    badges.push({ key: 'combo', label: `Combo x${maxCombo}`, tone: 'red' })
+    badges.push({ key: 'combo', label: `Serija x${maxCombo}`, tone: 'red' })
   }
 
   if (currentStreak >= 3) {

@@ -64,6 +64,7 @@ const TERM_ALIAS_GROUPS = [
   ['suma', 'šuma', 'gaj'],
   ['toplota', 'toplina', 'vrucina', 'vrućina'],
   ['obala', 'primorje'],
+  ['dubler', 'kaskader', 'stunt dubler'],
   ['pravac', 'smjer', 'smer', 'kurs'],
   ['mapa', 'karta'],
 ]
@@ -430,23 +431,10 @@ export const evaluateSmartAssociationAnswer = (wordItem = {}, actualAnswer = '')
     }
   }
 
-  const directCandidateMatch = acceptedCandidates.find((candidate) => {
-    const normalizedCandidate = normalizeBaseText(candidate)
-
-    if (!normalizedCandidate || normalizedCandidate.length < 5 || normalizedActual.length < 5) {
-      return false
-    }
-
-    return (
-      normalizedCandidate.includes(normalizedActual) ||
-      normalizedActual.includes(normalizedCandidate)
-    )
-  })
-
   return {
-    accepted: Boolean(directCandidateMatch),
+    accepted: false,
     partialAccepted: false,
-    matchedAnswer: directCandidateMatch ? normalizeBaseText(directCandidateMatch) : null,
+    matchedAnswer: null,
   }
 }
 

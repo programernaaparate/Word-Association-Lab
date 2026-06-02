@@ -103,14 +103,14 @@ function HomePage() {
   )
   const levelTheme = getLevelTheme(displayLevel)
   const dailyStatusCopy = dailyChallenge?.isCompleted
-    ? 'Danasnji izazov je vec zatvoren sa 100%.'
+    ? 'Danasnji izazov je vec uspjesno zavrsen.'
     : dailyChallenge?.content
-      ? `Daily je spreman za ${selectedDifficulty.toLowerCase()} / ${selectedCategory.toLowerCase()} izbor.`
+      ? `Dnevni izazov je spreman za ${selectedDifficulty.toLowerCase()} / ${selectedCategory.toLowerCase()} izbor.`
       : isDailyLoading
         ? 'Dnevni izazov se upravo ucitava iz baze.'
         : dailyError
-          ? 'Daily trenutno nije dostupan, ali ostali modovi rade normalno.'
-          : 'Cekamo da daily stigne sa servera.'
+          ? 'Dnevni izazov trenutno nije dostupan, ali ostali modovi rade normalno.'
+          : 'Cekamo da dnevni izazov stigne sa servera.'
   const sessionStatusCopy = hasContinuableSession
     ? 'Imas sacuvanu sesiju koju mozes nastaviti bez gubitka progresa.'
     : `Sljedeca nova runda krece sa ${selectedDifficulty.toLowerCase()} tezinom i kategorijom ${selectedCategory.toLowerCase()}.`
@@ -494,7 +494,7 @@ function HomePage() {
               <span className="tag neutral">{selectedCategory}</span>
               {dailyChallenge?.content ? (
                 <span className="tag green-pill">
-                  {dailyChallenge?.isCompleted ? 'Daily zavrsen' : 'Daily spreman'}
+                  {dailyChallenge?.isCompleted ? 'Dnevni zavrsen' : 'Dnevni spreman'}
                 </span>
               ) : null}
             </div>
@@ -527,7 +527,7 @@ function HomePage() {
                 (isDailyLoading
                   ? 'Ucitavam dnevni izazov iz baze...'
                   : dailyError ||
-                    'Daily challenge ce se pojaviti cim backend vrati sadrzaj.')}
+                    'Dnevni izazov ce se pojaviti cim backend vrati sadrzaj.')}
             </p>
 
             <div className="daily-percent">{dailyChallenge?.progress ?? 0}%</div>

@@ -51,6 +51,18 @@ const getSafeAnswers = (type, answers = []) =>
     ? answers.slice(0, MAX_ANSWERS_BY_TYPE[type] || 10)
     : []
 
+const getComboBonusFromAnswers = (answers = []) =>
+  (answers || []).reduce(
+    (sum, item) => sum + normalizeNumber(item?.comboBonusAwarded),
+    0
+  )
+
+const getMaxComboFromAnswers = (answers = []) =>
+  (answers || []).reduce(
+    (highest, item) => Math.max(highest, normalizeNumber(item?.comboAfterRound)),
+    0
+  )
+
 const calculateAssociationReward = ({
   difficulty = 'Lako',
   totalClues = 4,
@@ -162,6 +174,9 @@ const calculatePerformanceBonus = ({
 const buildMetricsFromScoreDelta = ({
   roundDelta = 0,
   performanceBonus = 0,
+  comboBonus = 0,
+  maxCombo = 0,
+  partialCount = 0,
   total = 0,
   correct = 0,
   accuracy = 0,
@@ -178,6 +193,9 @@ const buildMetricsFromScoreDelta = ({
     correct,
     accuracy,
     performanceBonus,
+    comboBonus: Math.max(0, Number(comboBonus) || 0),
+    maxCombo: Math.max(0, Number(maxCombo) || 0),
+    partialCount: Math.max(0, Number(partialCount) || 0),
   }
 }
 
@@ -190,6 +208,9 @@ const buildFallbackMetrics = ({
   time,
   hintCount,
   clientEarnedPoints,
+  comboBonus = 0,
+  maxCombo = 0,
+  partialCount = 0,
 }) => {
   const safeType = String(type || 'association')
   const maxTotal = MAX_ANSWERS_BY_TYPE[safeType] || 10
@@ -260,6 +281,9 @@ const buildFallbackMetrics = ({
   metrics.earnedPoints = Math.min(metrics.earnedPoints, normalizeNumber(clientEarnedPoints))
   metrics.score = BASE_SCORE + metrics.earnedPoints
   metrics.baseScore = Math.max(BASE_SCORE, metrics.score - performanceBonus)
+  metrics.comboBonus = normalizeNumber(comboBonus)
+  metrics.maxCombo = normalizeNumber(maxCombo)
+  metrics.partialCount = clamp(normalizeNumber(partialCount), 0, safeTotal)
 
   return metrics
 }
@@ -274,25 +298,28 @@ const calculateAssociationMetrics = ({
   const total = safeAnswers.length
   const correct = safeAnswers.filter((item) => Boolean(item.accepted)).length
   const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0
-  const roundDelta = safeAnswers.reduce((sum, item) => {
-    if (item.accepted) {
-      return (
-        sum +
-        calculateAssociationReward({
-          difficulty: getRoundDifficulty(item, difficulty),
-          totalClues: item.totalClues,
-          revealedCount: item.revealedCount,
-          hintUsed: Boolean(item.hintUsed),
-        })
-      )
-    }
+  const comboBonus = getComboBonusFromAnswers(safeAnswers)
+  const maxCombo = getMaxComboFromAnswers(safeAnswers)
+  const roundDelta =
+    safeAnswers.reduce((sum, item) => {
+      if (item.accepted) {
+        return (
+          sum +
+          calculateAssociationReward({
+            difficulty: getRoundDifficulty(item, difficulty),
+            totalClues: item.totalClues,
+            revealedCount: item.revealedCount,
+            hintUsed: Boolean(item.hintUsed),
+          })
+        )
+      }
 
-    if (hasSubmittedAnswer(item.answer)) {
-      return sum - ASSOCIATION_WRONG_PENALTY
-    }
+      if (hasSubmittedAnswer(item.answer)) {
+        return sum - ASSOCIATION_WRONG_PENALTY
+      }
 
-    return sum
-  }, 0)
+      return sum
+    }, 0) + comboBonus
   const performanceBonus = calculatePerformanceBonus({
     difficulty: getPerformanceDifficulty(safeAnswers, difficulty),
     total,
@@ -305,6 +332,8 @@ const calculateAssociationMetrics = ({
   return buildMetricsFromScoreDelta({
     roundDelta,
     performanceBonus,
+    comboBonus,
+    maxCombo,
     total,
     correct,
     accuracy,
@@ -325,46 +354,49 @@ const calculateLogicMetrics = ({
   const partialCount = safeAnswers.filter((item) => Boolean(item.partialAccepted)).length
   const weightedCorrect = correct + partialCount * 0.5
   const accuracy = total > 0 ? Math.round((weightedCorrect / total) * 100) : 0
-  const roundDelta = safeAnswers.reduce((sum, item) => {
-    if (item.accepted) {
-      return (
-        sum +
-        calculateLogicReward({
-          difficulty: getRoundDifficulty(item, difficulty),
-          mode:
-            item.mode === 'odd-one-out' || safeType === 'logic-odd-one-out'
-              ? 'odd-one-out'
-              : 'concept',
-          hintUsed: Boolean(item.hintUsed),
-        })
-      )
-    }
+  const comboBonus = getComboBonusFromAnswers(safeAnswers)
+  const maxCombo = getMaxComboFromAnswers(safeAnswers)
+  const roundDelta =
+    safeAnswers.reduce((sum, item) => {
+      if (item.accepted) {
+        return (
+          sum +
+          calculateLogicReward({
+            difficulty: getRoundDifficulty(item, difficulty),
+            mode:
+              item.mode === 'odd-one-out' || safeType === 'logic-odd-one-out'
+                ? 'odd-one-out'
+                : 'concept',
+            hintUsed: Boolean(item.hintUsed),
+          })
+        )
+      }
 
-    if (item.partialAccepted) {
-      return (
-        sum +
-        Math.max(
-          1,
-          Math.round(
-            calculateLogicReward({
-              difficulty: getRoundDifficulty(item, difficulty),
-              mode:
-                item.mode === 'odd-one-out' || safeType === 'logic-odd-one-out'
-                  ? 'odd-one-out'
-                  : 'concept',
-              hintUsed: Boolean(item.hintUsed),
-            }) * 0.5
+      if (item.partialAccepted) {
+        return (
+          sum +
+          Math.max(
+            1,
+            Math.round(
+              calculateLogicReward({
+                difficulty: getRoundDifficulty(item, difficulty),
+                mode:
+                  item.mode === 'odd-one-out' || safeType === 'logic-odd-one-out'
+                    ? 'odd-one-out'
+                    : 'concept',
+                hintUsed: Boolean(item.hintUsed),
+              }) * 0.5
+            )
           )
         )
-      )
-    }
+      }
 
-    if (hasSubmittedAnswer(item.answer)) {
-      return sum - LOGIC_WRONG_PENALTY
-    }
+      if (hasSubmittedAnswer(item.answer)) {
+        return sum - LOGIC_WRONG_PENALTY
+      }
 
-    return sum
-  }, 0)
+      return sum
+    }, 0) + comboBonus
   const performanceBonus = calculatePerformanceBonus({
     difficulty: getPerformanceDifficulty(safeAnswers, difficulty),
     total,
@@ -377,6 +409,9 @@ const calculateLogicMetrics = ({
   return buildMetricsFromScoreDelta({
     roundDelta,
     performanceBonus,
+    comboBonus,
+    maxCombo,
+    partialCount,
     total,
     correct,
     accuracy,
@@ -393,23 +428,26 @@ const calculateRelationMetrics = ({
   const total = safeAnswers.length
   const correct = safeAnswers.filter((item) => Boolean(item.accepted)).length
   const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0
-  const roundDelta = safeAnswers.reduce((sum, item) => {
-    if (item.accepted) {
-      return (
-        sum +
-        calculateRelationReward({
-          difficulty: getRoundDifficulty(item, difficulty),
-          hintUsed: Boolean(item.hintUsed),
-        })
-      )
-    }
+  const comboBonus = getComboBonusFromAnswers(safeAnswers)
+  const maxCombo = getMaxComboFromAnswers(safeAnswers)
+  const roundDelta =
+    safeAnswers.reduce((sum, item) => {
+      if (item.accepted) {
+        return (
+          sum +
+          calculateRelationReward({
+            difficulty: getRoundDifficulty(item, difficulty),
+            hintUsed: Boolean(item.hintUsed),
+          })
+        )
+      }
 
-    if (hasSubmittedAnswer(item.answer)) {
-      return sum - RELATION_WRONG_PENALTY
-    }
+      if (hasSubmittedAnswer(item.answer)) {
+        return sum - RELATION_WRONG_PENALTY
+      }
 
-    return sum
-  }, 0)
+      return sum
+    }, 0) + comboBonus
   const performanceBonus = calculatePerformanceBonus({
     difficulty: getPerformanceDifficulty(safeAnswers, difficulty),
     total,
@@ -422,6 +460,8 @@ const calculateRelationMetrics = ({
   return buildMetricsFromScoreDelta({
     roundDelta,
     performanceBonus,
+    comboBonus,
+    maxCombo,
     total,
     correct,
     accuracy,
@@ -485,6 +525,9 @@ const calculateWordChainMetrics = ({
   return buildMetricsFromScoreDelta({
     roundDelta,
     performanceBonus,
+    comboBonus: 0,
+    maxCombo: 0,
+    partialCount: 0,
     total,
     correct,
     accuracy,
@@ -508,6 +551,9 @@ export const calculateHistoryMetrics = (payload = {}) => {
       time,
       hintCount,
       clientEarnedPoints: payload.earnedPoints,
+      comboBonus: payload.comboBonus,
+      maxCombo: payload.maxCombo,
+      partialCount: payload.partialCount,
     })
   }
 
@@ -557,5 +603,8 @@ export const calculateHistoryMetrics = (payload = {}) => {
     time,
     hintCount,
     clientEarnedPoints: payload.earnedPoints,
+    comboBonus: payload.comboBonus,
+    maxCombo: payload.maxCombo,
+    partialCount: payload.partialCount,
   })
 }

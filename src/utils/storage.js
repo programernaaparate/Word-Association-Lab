@@ -218,7 +218,7 @@ const ACHIEVEMENT_DEFINITIONS = [
   },
   {
     key: 'combo-4',
-    label: 'Combo x4',
+    label: 'Serija x4',
     description: 'Spoji cetiri uzastopna tacna poteza.',
     tone: 'red',
     metric: 'bestCombo',
@@ -242,7 +242,7 @@ const ACHIEVEMENT_DEFINITIONS = [
   },
   {
     key: 'daily-7',
-    label: 'Daily rutina',
+    label: 'Dnevna rutina',
     description: 'Zavrsi 7 dnevnih izazova.',
     tone: 'teal',
     metric: 'completedDaily',

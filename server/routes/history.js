@@ -22,6 +22,9 @@ const mapHistoryItem = (item) => ({
   baseScore: item.base_score,
   earnedPoints: item.earned_points,
   awardedPoints: item.awarded_points,
+  performanceBonus: item.performance_bonus,
+  comboBonus: item.combo_bonus,
+  maxCombo: item.max_combo,
   total: item.total,
   correct: item.correct,
   accuracy: item.accuracy,
@@ -29,6 +32,8 @@ const mapHistoryItem = (item) => ({
   category: item.category,
   difficulty: item.difficulty,
   hintCount: item.hint_count,
+  wrongAttempts: item.wrong_attempts,
+  partialCount: item.partial_count,
   isDaily: Boolean(item.is_daily),
   dailyReward: item.daily_reward,
   createdAt: item.created_at,
@@ -36,9 +41,10 @@ const mapHistoryItem = (item) => ({
 
 router.get('/me', requireAuth, async (req, res) => {
   const rows = await query(
-    `SELECT id, game_type, score, base_score, earned_points, awarded_points, total, correct,
-            accuracy, time_seconds, category, difficulty, hint_count, is_daily,
-            daily_reward, created_at
+    `SELECT id, game_type, score, base_score, earned_points, awarded_points, performance_bonus,
+            combo_bonus, max_combo, total, correct, accuracy, time_seconds, category,
+            difficulty, hint_count, wrong_attempts, partial_count, is_daily, daily_reward,
+            created_at
      FROM game_history
      WHERE user_id = ?
      ORDER BY created_at DESC
@@ -52,7 +58,12 @@ router.get('/me', requireAuth, async (req, res) => {
         COALESCE(SUM(awarded_points), 0) AS total_points,
         COALESCE(SUM(CASE WHEN daily_reward > 0 THEN 1 ELSE 0 END), 0) AS completed_daily,
         COALESCE(ROUND(AVG(accuracy)), 0) AS average_accuracy,
-        COALESCE(MAX(awarded_points), 0) AS best_score
+        COALESCE(MAX(awarded_points), 0) AS best_score,
+        COALESCE(MAX(max_combo), 0) AS best_combo,
+        COALESCE(
+          SUM(CASE WHEN total > 0 AND accuracy = 100 AND wrong_attempts = 0 THEN 1 ELSE 0 END),
+          0
+        ) AS perfect_runs
      FROM game_history
      WHERE user_id = ?`,
     [req.user.id]
@@ -66,6 +77,8 @@ router.get('/me', requireAuth, async (req, res) => {
       completedDaily: Number(summary?.completed_daily || 0),
       averageAccuracy: Number(summary?.average_accuracy || 0),
       bestScore: Number(summary?.best_score || 0),
+      bestCombo: Number(summary?.best_combo || 0),
+      perfectRuns: Number(summary?.perfect_runs || 0),
     },
   })
 })
@@ -90,6 +103,10 @@ router.post('/', requireAuth, async (req, res) => {
     dailyContentType = null,
     dailyContentId = null,
     answers = [],
+    comboBonus = 0,
+    maxCombo = 0,
+    partialCount = 0,
+    wrongAttempts = 0,
   } = req.body || {}
 
   if (!type) {
@@ -110,11 +127,19 @@ router.post('/', requireAuth, async (req, res) => {
   const safeScore = Math.max(0, Number(calculatedMetrics.score) || 0)
   const safeBaseScore = Math.max(0, Number(calculatedMetrics.baseScore) || 0)
   const safeEarnedPoints = Math.max(0, Number(calculatedMetrics.earnedPoints) || 0)
+  const safePerformanceBonus = Math.max(0, Number(calculatedMetrics.performanceBonus) || 0)
+  const safeComboBonus = Math.max(0, Number(calculatedMetrics.comboBonus ?? comboBonus) || 0)
+  const safeMaxCombo = Math.max(0, Number(calculatedMetrics.maxCombo ?? maxCombo) || 0)
   const safeTotal = Math.max(0, Number(calculatedMetrics.total) || 0)
   const safeCorrect = Math.max(0, Number(calculatedMetrics.correct) || 0)
   const safeAccuracy = Math.max(0, Number(calculatedMetrics.accuracy) || 0)
   const safeTime = Math.max(0, Number(time) || 0)
   const safeHintCount = Math.max(0, Number(hintCount) || 0)
+  const safeWrongAttempts = Math.max(0, Number(wrongAttempts) || 0)
+  const safePartialCount = Math.max(
+    0,
+    Number(calculatedMetrics.partialCount ?? partialCount) || 0
+  )
   const completedSuccessfully = safeTotal > 0 && safeCorrect >= safeTotal
 
   for (let attempt = 1; attempt <= MAX_HISTORY_SAVE_RETRIES; attempt += 1) {
@@ -177,9 +202,10 @@ router.post('/', requireAuth, async (req, res) => {
 
       const [insertResult] = await connection.execute(
         `INSERT INTO game_history
-          (user_id, game_type, score, base_score, earned_points, awarded_points, total, correct,
-           accuracy, time_seconds, category, difficulty, hint_count, is_daily, daily_reward)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (user_id, game_type, score, base_score, earned_points, awarded_points, performance_bonus,
+           combo_bonus, max_combo, total, correct, accuracy, time_seconds, category, difficulty,
+           hint_count, wrong_attempts, partial_count, is_daily, daily_reward)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           req.user.id,
           type,
@@ -187,6 +213,9 @@ router.post('/', requireAuth, async (req, res) => {
           safeBaseScore,
           safeEarnedPoints,
           finalAwardedPoints,
+          safePerformanceBonus,
+          safeComboBonus,
+          safeMaxCombo,
           safeTotal,
           safeCorrect,
           safeAccuracy,
@@ -194,6 +223,8 @@ router.post('/', requireAuth, async (req, res) => {
           category,
           difficulty,
           safeHintCount,
+          safeWrongAttempts,
+          safePartialCount,
           Number(Boolean(isDaily)),
           resolvedDailyReward,
         ]
@@ -227,8 +258,9 @@ router.post('/', requireAuth, async (req, res) => {
         }
       }
       const [historyRows] = await connection.execute(
-        `SELECT id, game_type, score, base_score, earned_points, awarded_points, total, correct,
-                accuracy, time_seconds, category, difficulty, hint_count, is_daily,
+        `SELECT id, game_type, score, base_score, earned_points, awarded_points, performance_bonus,
+                combo_bonus, max_combo, total, correct, accuracy, time_seconds, category,
+                difficulty, hint_count, wrong_attempts, partial_count, is_daily,
                 daily_reward, created_at
          FROM game_history
          WHERE id = ?

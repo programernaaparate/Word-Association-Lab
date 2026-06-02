@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import AppIcon from '../components/AppIcon'
+import AuthGameActions from '../components/AuthGameActions'
 import GoogleIdentityButton from '../components/GoogleIdentityButton'
 import { loginWithGoogleRequest, registerUserRequest } from '../utils/api'
 import { saveAuthSession } from '../utils/storage'
@@ -150,28 +151,14 @@ function RegisterPage() {
             <span>ILI NASTAVI SA</span>
           </div>
 
-          <div className="social-row">
+          <div className="auth-social-stack">
             <GoogleIdentityButton
               onCredential={handleGoogleLogin}
               onError={setError}
               disabled={isSubmitting}
+              compact={false}
             />
-            <button
-              className="social-btn"
-              type="button"
-              aria-label="Apple prijava"
-              onClick={() => setError('Apple prijava stize uskoro.')}
-            >
-              <AppIcon name="apple" size={22} />
-            </button>
-            <button
-              className="social-btn"
-              type="button"
-              aria-label="Facebook prijava"
-              onClick={() => setError('Facebook prijava stize uskoro.')}
-            >
-              <AppIcon name="facebook" size={22} />
-            </button>
+            <AuthGameActions />
           </div>
         </div>
       </div>

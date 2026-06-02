@@ -33,17 +33,113 @@ const parseList = (value) =>
     .map((item) => String(item || '').trim())
     .filter(Boolean)
 
+const parseUniqueList = (value) => {
+  const uniqueMap = new Map()
+
+  parseList(value).forEach((item) => {
+    const itemKey = item.toLowerCase()
+
+    if (!uniqueMap.has(itemKey)) {
+      uniqueMap.set(itemKey, item)
+    }
+  })
+
+  return Array.from(uniqueMap.values())
+}
+
+const getContentTargetTitle = (type, item = {}) => {
+  if (type === 'logic') {
+    return item.answer || 'Logicki izazov'
+  }
+
+  if (type === 'relation') {
+    return `${item.leftWord || '?'} / ${item.rightWord || '?'}`
+  }
+
+  return item.word || 'Asocijacija'
+}
+
+const getContentTargetSubtitle = (type, item = {}) => {
+  if (type === 'logic') {
+    return `${item.mode === 'odd-one-out' ? 'Ne pripada' : 'Koncept'} / ${item.category || 'Bez kategorije'} / ${item.difficulty || 'Lako'}`
+  }
+
+  if (type === 'relation') {
+    return `${item.relation || 'Asocijacija'} / ${item.category || 'Bez kategorije'} / ${item.difficulty || 'Lako'}`
+  }
+
+  return `${item.category || 'Bez kategorije'} / ${item.difficulty || 'Lako'}`
+}
+
+const buildContentTarget = (type, item = {}) => {
+  if (!item) {
+    return null
+  }
+
+  return {
+    type,
+    id: Number(item.id || 0) || null,
+    title: getContentTargetTitle(type, item),
+    subtitle: getContentTargetSubtitle(type, item),
+    symbol: item.symbol || '',
+    hint: item.hint || '',
+    clues: Array.isArray(item.clues) ? item.clues : [],
+    words: Array.isArray(item.words) ? item.words : [],
+    acceptedAnswers: Array.isArray(item.acceptedAnswers) ? item.acceptedAnswers : [],
+    relation: item.relation || '',
+    leftWord: item.leftWord || '',
+    rightWord: item.rightWord || '',
+    category: item.category || '',
+    difficulty: item.difficulty || '',
+  }
+}
+
 const mapSubmission = (item) => ({
   id: item.id,
   user: item.user_label,
   type: item.game_type,
   content: item.content,
+  contentLines: String(item.content || '')
+    .split('|')
+    .map((part) => part.trim())
+    .filter(Boolean),
   points: item.points,
   time: item.time_seconds,
   status: item.status,
   isDaily: Boolean(item.is_daily),
+  submissionKind: item.submission_kind || 'game',
+  contentType: item.content_type || null,
+  contentItemId: item.content_item_id ? Number(item.content_item_id) : null,
+  proposedAnswer: item.proposed_answer || null,
   createdAt: item.created_at,
 })
+
+const enrichSubmission = async (submission) => {
+  if (!submission?.contentType || !submission?.contentItemId) {
+    return submission
+  }
+
+  const contentItem = await getContentItemByTypeAndId(
+    submission.contentType,
+    submission.contentItemId
+  )
+
+  if (!contentItem) {
+    return submission
+  }
+
+  const contentTarget = buildContentTarget(submission.contentType, contentItem)
+  const requestedAction =
+    submission.submissionKind === 'answer_review' && submission.proposedAnswer
+      ? `Dodaj odgovor "${submission.proposedAnswer}" za unos "${contentTarget.title}".`
+      : `Pregledaj unos "${contentTarget.title}".`
+
+  return {
+    ...submission,
+    contentTarget,
+    requestedAction,
+  }
+}
 
 const mapAdminUser = (item) => ({
   id: item.id,
@@ -63,7 +159,7 @@ const buildContentPayload = (type, payload = {}) => {
     const word = String(payload.word || '').trim()
     const symbol = String(payload.symbol || '').trim()
     const clues = parseList(payload.clues)
-    const acceptedAnswers = parseList(payload.acceptedAnswers)
+    const acceptedAnswers = parseUniqueList([word, ...parseList(payload.acceptedAnswers)])
 
     if (!word || clues.length < 2) {
       return { error: 'Asocijacija mora imati rjesenje i makar dva traga.' }
@@ -79,7 +175,7 @@ const buildContentPayload = (type, payload = {}) => {
         hint:
           String(payload.hint || '').trim() ||
           `Pomisli na pojam ${word.toLowerCase()}.`,
-        acceptedAnswers: acceptedAnswers.length ? acceptedAnswers : [word],
+        acceptedAnswers,
       },
     }
   }
@@ -512,47 +608,122 @@ router.delete('/content/:type/:id', async (req, res) => {
 })
 
 router.get('/submissions', async (req, res) => {
-  const { status } = req.query
+  const { status, kind, contentType, search } = req.query
   const params = []
-  const whereClause =
-    status && status !== 'all'
-      ? (() => {
-          params.push(status)
-          return 'WHERE status = ?'
-        })()
-      : ''
+  const conditions = []
+
+  if (status && status !== 'all') {
+    conditions.push('status = ?')
+    params.push(status)
+  }
+
+  if (kind && kind !== 'all') {
+    conditions.push('submission_kind = ?')
+    params.push(kind)
+  }
+
+  if (contentType && contentType !== 'all') {
+    conditions.push('content_type = ?')
+    params.push(contentType)
+  }
+
+  if (search) {
+    const searchPattern = `%${String(search).trim()}%`
+    conditions.push(
+      '(user_label LIKE ? OR content LIKE ? OR COALESCE(proposed_answer, \'\') LIKE ?)'
+    )
+    params.push(searchPattern, searchPattern, searchPattern)
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
 
   const rows = await query(
-    `SELECT id, user_label, game_type, content, points, time_seconds, status, is_daily, created_at
+    `SELECT id, user_label, game_type, content, points, time_seconds, status, is_daily, submission_kind, content_type, content_item_id, proposed_answer, created_at
      FROM game_submissions
      ${whereClause}
-     ORDER BY created_at DESC`,
+     ORDER BY created_at DESC
+     LIMIT 200`,
     params
   )
 
-  return res.json({ items: rows.map(mapSubmission) })
+  const items = await Promise.all(rows.map((item) => enrichSubmission(mapSubmission(item))))
+
+  return res.json({ items })
 })
 
 router.patch('/submissions/:id/status', async (req, res) => {
+  const submissionId = Number(req.params.id || 0)
   const nextStatus =
     req.body?.status === 'approved' || req.body?.status === 'flagged'
       ? req.body.status
       : 'pending'
 
-  await query('UPDATE game_submissions SET status = ? WHERE id = ?', [
-    nextStatus,
-    req.params.id,
-  ])
+  if (!submissionId) {
+    return res.status(400).json({ message: 'Submission nije validan.' })
+  }
 
-  const rows = await query(
-    `SELECT id, user_label, game_type, content, points, time_seconds, status, is_daily, created_at
+  const [existingSubmission] = await query(
+    `SELECT id, submission_kind, content_type, content_item_id, proposed_answer
      FROM game_submissions
      WHERE id = ?
      LIMIT 1`,
-    [req.params.id]
+    [submissionId]
   )
 
-  return res.json({ item: rows[0] ? mapSubmission(rows[0]) : null })
+  if (!existingSubmission) {
+    return res.status(404).json({ message: 'Submission nije pronadjen.' })
+  }
+
+  if (
+    nextStatus === 'approved' &&
+    existingSubmission.submission_kind === 'answer_review' &&
+    existingSubmission.content_type === 'association' &&
+    Number(existingSubmission.content_item_id || 0) > 0 &&
+    String(existingSubmission.proposed_answer || '').trim()
+  ) {
+    const [associationItem] = await query(
+      'SELECT accepted_answers_json FROM association_words WHERE id = ? LIMIT 1',
+      [existingSubmission.content_item_id]
+    )
+
+    if (associationItem) {
+      let acceptedAnswers = []
+
+      try {
+        acceptedAnswers = Array.isArray(associationItem.accepted_answers_json)
+          ? associationItem.accepted_answers_json
+          : JSON.parse(String(associationItem.accepted_answers_json || '[]'))
+      } catch {
+        acceptedAnswers = []
+      }
+
+      const nextAnswer = String(existingSubmission.proposed_answer || '').trim()
+      const alreadyExists = acceptedAnswers.some(
+        (item) => String(item || '').trim().toLowerCase() === nextAnswer.toLowerCase()
+      )
+
+      if (!alreadyExists) {
+        await query(
+          'UPDATE association_words SET accepted_answers_json = ? WHERE id = ?',
+          [JSON.stringify([...acceptedAnswers, nextAnswer]), existingSubmission.content_item_id]
+        )
+      }
+    }
+  }
+
+  await query('UPDATE game_submissions SET status = ? WHERE id = ?', [nextStatus, submissionId])
+
+  const rows = await query(
+    `SELECT id, user_label, game_type, content, points, time_seconds, status, is_daily, submission_kind, content_type, content_item_id, proposed_answer, created_at
+     FROM game_submissions
+     WHERE id = ?
+     LIMIT 1`,
+    [submissionId]
+  )
+
+  return res.json({
+    item: rows[0] ? await enrichSubmission(mapSubmission(rows[0])) : null,
+  })
 })
 
 router.get('/daily', async (req, res) => {

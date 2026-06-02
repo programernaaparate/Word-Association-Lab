@@ -50,7 +50,7 @@ const scoringRules = [
   'Teze runde daju vise XP-a od lakih.',
   'Tacni odgovori, brzina i igra bez pomoci donose bonus.',
   'Pogresan odgovor moze da skine poene, a prazan odgovor ih ne dodaje.',
-  'Daily challenge daje dodatni bonus samo jednom, kada je uspjesno zavrsen.',
+  'Dnevni izazov daje dodatni bonus samo jednom, kada je uspjesno zavrsen.',
 ]
 
 const quickStartSteps = [
@@ -148,7 +148,7 @@ function GuidePage() {
 
           <section className="leaderboard-card">
             <div className="section-row">
-              <h2>Pomoc i daily challenge</h2>
+              <h2>Pomoc i dnevni izazov</h2>
               <span className="muted">Bitne stvari</span>
             </div>
 
@@ -164,7 +164,7 @@ function GuidePage() {
               <div className="guide-callout guide-callout-green">
                 <strong>Dnevni izazov</strong>
                 <p>
-                  Daily se mijenja svaki dan u 12 AM i daje bonus samo ako je tacno
+                  Dnevni izazov se mijenja svakog dana u 00:00 i daje bonus samo ako je tacno
                   zavrsen. Kad je uspjesno odradjen, prikazuje se kao 100%.
                 </p>
               </div>

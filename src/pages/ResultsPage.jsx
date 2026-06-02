@@ -68,7 +68,7 @@ function ResultsPage() {
 
   if (hintCount >= 2) {
     nextTip =
-      'Probaj sledecu rundu sa manje pomoci. Najvise XP-a uzimas kad rjesenje uhvatis prije hint-a.'
+      'Probaj sledecu rundu sa manje pomoci. Najvise XP-a uzimas kad rjesenje uhvatis prije pomoci.'
   } else if (wrongAttempts >= 2) {
     nextTip =
       'Tempo ti je dobar, ali vrijedi usporiti pola sekunde i potvrditi logiku prije klika ili unosa.'
@@ -77,10 +77,10 @@ function ResultsPage() {
       'Bio si blizu. Sledeci put ciljaj precizniji pojam umjesto sire asocijacije.'
   } else if (maxCombo >= 3) {
     nextTip =
-      'Odlican momentum. Nastavi da cuvas combo bez praznih i brzopletih poteza.'
+      'Odlican ritam. Nastavi da cuvas seriju bez praznih i brzopletih poteza.'
   } else if (hasAnyCorrectAnswer) {
     nextTip =
-      'Dobar prolaz. Ako sacuvas isti nivo preciznosti i brzine, streak i combo ce brzo rasti.'
+      'Dobar prolaz. Ako sacuvas isti nivo preciznosti i brzine, niz i serija ce brzo rasti.'
   }
   const visibleAnswers = showAllAnswers ? answers : answers.slice(0, 3)
 
@@ -183,7 +183,7 @@ function ResultsPage() {
                 </div>
 
                 <div className="mini-stat-card">
-                  <small>BEST COMBO</small>
+                  <small>NAJBOLJA SERIJA</small>
                   <strong>{maxCombo > 0 ? `x${maxCombo}` : '-'}</strong>
                 </div>
 
@@ -343,10 +343,10 @@ function ResultsPage() {
                 <p><strong>Tezinski bonus:</strong> x{difficultyMultiplier.toFixed(2)}</p>
                 <p><strong>Netacnih pokusaja:</strong> {wrongAttempts}</p>
                 <p><strong>Djelimicno tacnih:</strong> {partialCount}</p>
-                <p><strong>Iskoriscenih hintova:</strong> {hintCount}</p>
-                <p><strong>Aktivni streak:</strong> {currentStreak} dana</p>
-                <p><strong>Najbolji combo:</strong> {maxCombo > 0 ? `x${maxCombo}` : 'Nema'}</p>
-                <p><strong>Combo bonus:</strong> +{comboBonus}</p>
+                <p><strong>Iskoriscenih pomoci:</strong> {hintCount}</p>
+                <p><strong>Aktivni niz:</strong> {currentStreak} dana</p>
+                <p><strong>Najbolja serija:</strong> {maxCombo > 0 ? `x${maxCombo}` : 'Nema'}</p>
+                <p><strong>Bonus za seriju:</strong> +{comboBonus}</p>
                 <p><strong>Zaradjen XP u partiji:</strong> +{earnedPoints}</p>
                 <p><strong>Bonus performansi:</strong> +{performanceBonus}</p>
                 <p><strong>Bonus dnevnog izazova:</strong> +{dailyReward}</p>

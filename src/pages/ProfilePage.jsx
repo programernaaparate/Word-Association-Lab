@@ -3,6 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import BottomNav from '../components/BottomNav'
 import Navbar from '../components/Navbar'
 import {
+  buildHistorySummary,
+  mergeRemoteHistoryWithLocal,
+  persistMergedHistory,
+} from '../utils/historySync'
+import {
   getCurrentUserRequest,
   getMyHistoryRequest,
 } from '../utils/api'
@@ -13,9 +18,7 @@ import {
   getActiveSession,
   getAuthToken,
   getCurrentUser,
-  getCurrentUserGameHistory,
   isExpiredDailySession,
-  getPlayerProgressOverview,
   getLevelProgress,
   logoutUser,
   saveCurrentUser,
@@ -23,53 +26,14 @@ import {
 import { getLevelTheme } from '../utils/levelTheme'
 import { getSoundEnabled, playSuccessSound, saveSoundEnabled } from '../utils/uiFeedback'
 
-const getHistoryPoints = (history) =>
-  history.reduce(
-    (sum, item) => sum + Math.max(0, Number(item.awardedPoints ?? item.earnedPoints ?? 0) || 0),
-    0
-  )
-
-const getHistoryKey = (item) =>
-  [
-    item?.id || 'local',
-    item?.type || '',
-    item?.createdAt || '',
-    item?.score || '',
-    item?.total || '',
-    item?.correct || '',
-  ].join('-')
-
-const mergeHistoryLists = (remoteHistory = []) => {
-  const localHistory = getCurrentUserGameHistory()
-  const mergedMap = new Map()
-
-  ;[...(remoteHistory || []), ...localHistory].forEach((item) => {
-    const itemKey = getHistoryKey(item)
-    if (!mergedMap.has(itemKey)) {
-      mergedMap.set(itemKey, item)
-    }
-  })
-
-  return Array.from(mergedMap.values()).sort(
-    (leftItem, rightItem) => new Date(rightItem.createdAt || 0) - new Date(leftItem.createdAt || 0)
-  )
-}
-
-const buildHistorySummary = (history = []) => {
-  const overview = getPlayerProgressOverview(history)
-
-  return {
-    ...overview,
-    totalPoints: Math.max(overview.totalPoints, getHistoryPoints(history)),
-  }
-}
-
 function ProfilePage() {
   const navigate = useNavigate()
   const token = getAuthToken()
   const activeSession = getActiveSession()
   const [user, setUser] = useState(() => getCurrentUser())
-  const [summary, setSummary] = useState(() => buildHistorySummary(mergeHistoryLists([])))
+  const [summary, setSummary] = useState(() =>
+    buildHistorySummary(mergeRemoteHistoryWithLocal([]))
+  )
   const [error, setError] = useState('')
   const [soundEnabled, setSoundEnabled] = useState(() => getSoundEnabled())
   const hasContinuableSession = Boolean(activeSession?.type) && !isExpiredDailySession(activeSession)
@@ -94,34 +58,21 @@ function ProfilePage() {
         }
 
         const remoteHistory = historyResponse.items || []
-        const mergedHistory = mergeHistoryLists(remoteHistory)
+        const mergedHistory = mergeRemoteHistoryWithLocal(remoteHistory)
         const localUser = getCurrentUser()
-        const fallbackSummary = buildHistorySummary(mergedHistory)
-        const remoteSummary = historyResponse.summary || null
-        const nextSummary =
-          remoteSummary && mergedHistory.length === remoteHistory.length
-            ? {
-                ...fallbackSummary,
-                ...remoteSummary,
-                bestScore: Math.max(
-                  Number(remoteSummary.bestScore || 0),
-                  Number(fallbackSummary.bestScore || 0)
-                ),
-              }
-            : fallbackSummary
-        const historyPoints = nextSummary.totalPoints
+        const nextSummary = buildHistorySummary(mergedHistory, historyResponse.summary || null)
         const nextUser = {
           ...(localUser || {}),
           ...(userResponse.user || {}),
-          points: Math.max(
-            Number(userResponse.user?.points || 0),
-            Number(localUser?.points || 0),
-            historyPoints
-          ),
         }
 
+        nextUser.points = Math.max(
+          0,
+          Number(userResponse.user?.points ?? nextUser.points ?? nextSummary.totalPoints ?? 0) || 0
+        )
         nextUser.level = calculateLevelFromPoints(nextUser.points)
 
+        persistMergedHistory(mergedHistory)
         saveCurrentUser(nextUser)
         setUser(nextUser)
         setSummary(nextSummary)
@@ -130,7 +81,7 @@ function ProfilePage() {
           return
         }
 
-        const localHistory = mergeHistoryLists([])
+        const localHistory = mergeRemoteHistoryWithLocal([])
         setSummary(buildHistorySummary(localHistory))
         setError(
           localHistory.length
@@ -153,9 +104,9 @@ function ProfilePage() {
     }
   }, [activeSession])
 
-  const displayPoints = Math.max(Number(user?.points || 0), summary.totalPoints)
+  const displayPoints = Math.max(0, Number(user?.points ?? summary.totalPoints ?? 0) || 0)
   const username = user?.username || 'Korisnik'
-  const role = user?.role === 'admin' ? 'Administrator' : 'Lab igrac'
+  const role = user?.role === 'admin' ? 'Administrator' : 'Igrac laboratorije'
   const levelData = getLevelProgress(displayPoints)
   const levelTheme = getLevelTheme(levelData.level)
 
@@ -263,10 +214,10 @@ function ProfilePage() {
 
             <div className="profile-info-box">
               <p><strong>Korisnicko ime:</strong> {username}</p>
-              <p><strong>Uloga:</strong> {user?.role || 'user'}</p>
+              <p><strong>Uloga:</strong> {role}</p>
               <p><strong>Status:</strong> Aktivan korisnik</p>
-              <p><strong>Aktivni streak:</strong> {summary.currentStreak} dana</p>
-              <p><strong>Najbolji combo:</strong> x{summary.bestCombo}</p>
+              <p><strong>Aktivni niz:</strong> {summary.currentStreak} dana</p>
+              <p><strong>Najbolja serija:</strong> {summary.bestCombo > 0 ? `x${summary.bestCombo}` : 'Nema'}</p>
             </div>
           </div>
 
@@ -289,12 +240,12 @@ function ProfilePage() {
               </div>
 
               <div className="mini-stat-card">
-                <small>BEST XP</small>
+                <small>NAJBOLJI XP</small>
                 <strong>{summary.bestScore}</strong>
               </div>
 
               <div className="mini-stat-card">
-                <small>DAILY</small>
+                <small>DNEVNI</small>
                 <strong>{summary.completedDaily}</strong>
               </div>
             </div>
@@ -306,7 +257,7 @@ function ProfilePage() {
               </div>
 
               <div className="mini-stat-card">
-                <small>COMBO</small>
+                <small>SERIJA</small>
                 <strong>{summary.bestCombo > 0 ? `x${summary.bestCombo}` : '-'}</strong>
               </div>
 
@@ -318,7 +269,7 @@ function ProfilePage() {
 
             <div className="profile-info-box">
               <p><strong>Ukupno zaradjen XP iz istorije:</strong> {summary.totalPoints}</p>
-              <p><strong>Najduzi streak:</strong> {summary.longestStreak} dana</p>
+              <p><strong>Najduzi niz:</strong> {summary.longestStreak} dana</p>
               <p><strong>Perfektnih partija:</strong> {summary.perfectRuns}</p>
             </div>
           </div>
@@ -354,7 +305,7 @@ function ProfilePage() {
                 <div className="profile-info-box">
                   <p><strong>Tip igre:</strong> {formatSessionType(activeSession.type)}</p>
                   <p><strong>Progres:</strong> korak {(activeSession.index ?? 0) + 1}</p>
-                  <p><strong>Daily rezim:</strong> {activeSession.isDaily ? 'Da' : 'Ne'}</p>
+                  <p><strong>Dnevni rezim:</strong> {activeSession.isDaily ? 'Da' : 'Ne'}</p>
                 </div>
 
                 <div className="results-actions">

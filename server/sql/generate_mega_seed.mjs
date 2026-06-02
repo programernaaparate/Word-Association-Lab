@@ -236,7 +236,7 @@ const generatedAssociationBlueprints = {
     ['Genetika', 'Srednje', ['Nasljedje', 'DNK', 'Osobine', 'Geni'], 'Oblast koja proucava nasljedne osobine zivih bica.'],
     ['Fosil', 'Srednje', ['Kamen', 'Ostatak', 'Proslost', 'Nalaz'], 'Ocuvani ostatak ili trag davnog zivog bica.'],
     ['Gravitacija', 'Srednje', ['Privlacenje', 'Pad', 'Masa', 'Sila'], 'Sila koja privlaci tijela jedno ka drugom.'],
-    ['Hormon', 'Tesko', ['Organizam', 'Signal', 'Zlijezda', 'Ravnoteza'], 'Hemijski glasnik koji regulise mnoge procese u tijelu.'],
+    ['Hormon', 'Tesko', ['Organizam', 'Signal', 'Zlijezda', 'Ravnoteza'], 'Hemijski signal koji upravlja mnogim procesima u tijelu.'],
     ['Meteorologija', 'Tesko', ['Vrijeme', 'Prognoza', 'Oblaci', 'Padavine'], 'Nauka koja proucava vrijeme i atmosferu.'],
     ['Tektonika', 'Tesko', ['Ploce', 'Zemljotres', 'Pomjeranje', 'Kora'], 'Proucavanje kretanja i sudara velikih djelova Zemljine kore.'],
   ],
