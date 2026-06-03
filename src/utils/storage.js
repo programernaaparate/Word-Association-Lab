@@ -7,6 +7,7 @@ import {
 import {
   evaluateSmartAssociationAnswer,
   evaluateSmartConceptAnswer,
+  expandAcceptedAnswersForValue,
   repairLegacyText,
 } from './localSmartMatching'
 
@@ -318,7 +319,10 @@ const sanitizeContentItem = (item = {}) => ({
   answer: repairLegacyText(item.answer || ''),
   leftWord: repairLegacyText(item.leftWord || ''),
   rightWord: repairLegacyText(item.rightWord || ''),
-  acceptedAnswers: sanitizeTextArray(item.acceptedAnswers || []),
+  acceptedAnswers: expandAcceptedAnswersForValue(
+    item.word || item.answer || '',
+    sanitizeTextArray(item.acceptedAnswers || [])
+  ),
   clues: sanitizeTextArray(item.clues || []),
   words: sanitizeTextArray(item.words || []),
 })
@@ -328,6 +332,8 @@ const sanitizeContentItems = (items = []) => (items || []).map(sanitizeContentIt
 const sanitizeWordChainPreset = (preset = {}) => ({
   id: repairLegacyText(preset.id || preset.centerWord || ''),
   centerWord: repairLegacyText(preset.centerWord || ''),
+  category: repairLegacyText(preset.category || ''),
+  difficulty: repairLegacyText(preset.difficulty || ''),
   starterNodes: (preset.starterNodes || []).map((node) => ({
     ...node,
     word: repairLegacyText(node.word || ''),
@@ -888,14 +894,58 @@ export const getDashboardStats = () => {
 }
 
 export const saveActiveSession = (session) => {
+  const currentUser = getCurrentUser()
+
   writeStorage('activeSession', {
     ...session,
+    userId: session?.userId ?? currentUser?.id ?? null,
+    username: session?.username ?? currentUser?.username ?? null,
     updatedAt: new Date().toISOString(),
   })
 }
 
 export const getActiveSession = () => {
-  return readStorage('activeSession', null)
+  const session = readStorage('activeSession', null)
+
+  if (!session) {
+    return null
+  }
+
+  const currentUser = getCurrentUser()
+
+  if (!currentUser) {
+    return session
+  }
+
+  const sessionUserId =
+    session?.userId === null || session?.userId === undefined ? null : Number(session.userId)
+  const currentUserId =
+    currentUser?.id === null || currentUser?.id === undefined ? null : Number(currentUser.id)
+  const sessionUsername =
+    typeof session?.username === 'string' ? session.username.trim().toLowerCase() : ''
+  const currentUsername =
+    typeof currentUser?.username === 'string' ? currentUser.username.trim().toLowerCase() : ''
+
+  if (sessionUserId !== null && currentUserId !== null) {
+    if (sessionUserId !== currentUserId) {
+      localStorage.removeItem('activeSession')
+      return null
+    }
+
+    return session
+  }
+
+  if (sessionUsername && currentUsername) {
+    if (sessionUsername !== currentUsername) {
+      localStorage.removeItem('activeSession')
+      return null
+    }
+
+    return session
+  }
+
+  localStorage.removeItem('activeSession')
+  return null
 }
 
 export const clearActiveSession = () => {
@@ -1077,22 +1127,43 @@ export const getWordChainPreset = (
   { commit = true, presetId = null } = {}
 ) => {
   const normalizedCategory = normalizeCategory(category)
-  const presetKey =
-    normalizedCategory === ALL_CATEGORY
-      ? `${DEFAULT_CATEGORY}-${difficulty}`
-      : `${normalizedCategory}-${difficulty}`
+  const presetKey = `${normalizedCategory}-${difficulty}`
   const fallbackPresetKey = `${DEFAULT_CATEGORY}-${difficulty}`
   const defaultFallbackPresetKey = `${DEFAULT_CATEGORY}-${DEFAULT_DIFFICULTY}`
-  const availablePresets = sanitizeWordChainPresetCollection(
-    DEFAULT_WORD_CHAIN_PRESETS[presetKey] ||
-      DEFAULT_WORD_CHAIN_PRESETS[fallbackPresetKey] ||
-      DEFAULT_WORD_CHAIN_PRESETS[defaultFallbackPresetKey]
-  )
+  const availablePresets =
+    normalizedCategory === ALL_CATEGORY
+      ? Object.entries(DEFAULT_WORD_CHAIN_PRESETS)
+          .filter(([key]) => key.endsWith(`-${difficulty}`))
+          .flatMap(([key, presets]) => {
+            const [presetCategory = DEFAULT_CATEGORY] = key.split('-')
+            return sanitizeWordChainPresetCollection(presets).map((preset) => ({
+              ...preset,
+              category: preset.category || presetCategory,
+              difficulty: preset.difficulty || difficulty,
+            }))
+          })
+      : sanitizeWordChainPresetCollection(
+          DEFAULT_WORD_CHAIN_PRESETS[presetKey] ||
+            DEFAULT_WORD_CHAIN_PRESETS[fallbackPresetKey] ||
+            DEFAULT_WORD_CHAIN_PRESETS[defaultFallbackPresetKey]
+        ).map((preset) => ({
+          ...preset,
+          category:
+            preset.category ||
+            (DEFAULT_WORD_CHAIN_PRESETS[presetKey]
+              ? normalizedCategory
+              : DEFAULT_WORD_CHAIN_PRESETS[fallbackPresetKey]
+                ? DEFAULT_CATEGORY
+                : DEFAULT_CATEGORY),
+          difficulty: preset.difficulty || difficulty,
+        }))
 
   if (!availablePresets.length) {
     return sanitizeWordChainPreset({
       id: `${presetKey}-fallback`,
       centerWord: DEFAULT_CATEGORY,
+      category: DEFAULT_CATEGORY,
+      difficulty,
       starterNodes: [],
     })
   }
@@ -1108,7 +1179,7 @@ export const getWordChainPreset = (
   const [selectedPresetId] = getRotatedSessionItemIds({
     gameType: 'word-chain-preset',
     difficulty,
-    category: normalizedCategory === ALL_CATEGORY ? DEFAULT_CATEGORY : normalizedCategory,
+    category: normalizedCategory,
     mode: presetKey,
     items: availablePresets,
     count: 1,

@@ -295,7 +295,9 @@ function WordChainPage() {
       }),
     [activeSession?.presetId, category, difficulty, isSavedWordChainSession]
   )
-  const presetKey = category === 'Sve' ? `Priroda-${difficulty}` : `${category}-${difficulty}`
+  const presetCategory = chainPreset.category || (category === 'Sve' ? 'Priroda' : category)
+  const categoryLabel = category === 'Sve' ? `Sve / ${presetCategory}` : presetCategory
+  const presetKey = `${presetCategory}-${difficulty}`
   const allowedNodes = CHAIN_ALLOWED_NODES[presetKey] || CHAIN_ALLOWED_NODES['Priroda-Srednje']
   const starterNodesTemplate = useMemo(() => {
     if (
@@ -421,7 +423,7 @@ function WordChainPage() {
           `Centar: ${centerWord}`,
           `Tip veze: ${pendingReviewCandidate.relation}`,
           `Predlozena rijec: ${pendingReviewCandidate.word}`,
-          `Kategorija: ${category}`,
+          `Kategorija: ${categoryLabel}`,
           `Tezina: ${difficulty}`,
           pendingReviewCandidate.reason ? `Razlog odbijanja: ${pendingReviewCandidate.reason}` : '',
           (allowedNodes[pendingReviewCandidate.relation] || []).length
@@ -494,7 +496,7 @@ function WordChainPage() {
             centerWord,
             candidateWord: trimmedWord,
             relation,
-            category,
+            category: presetCategory,
             difficulty,
             relationExamples: allowedNodes[relation] || [],
           })
@@ -603,22 +605,22 @@ function WordChainPage() {
       })
       const finalEarnedPoints = chainEvaluation.earnedPoints + performanceBonus
 
-      const result = {
-        type: 'word-chain',
-        score: finalEarnedPoints,
-        earnedPoints: finalEarnedPoints,
+        const result = {
+          type: 'word-chain',
+          score: finalEarnedPoints,
+          earnedPoints: finalEarnedPoints,
         performanceBonus,
         total: Math.max(nodes.length, 4),
         correct: chainEvaluation.validNodes,
         accuracy: chainEvaluation.accuracy,
         time: seconds,
-        category,
-        difficulty,
-        answers,
-      }
+          category: presetCategory,
+          difficulty,
+          answers,
+        }
 
-      const historyEntry = {
-        type: 'word-chain',
+        const historyEntry = {
+          type: 'word-chain',
         score: finalEarnedPoints,
         earnedPoints: result.earnedPoints,
         awardedPoints: result.earnedPoints,
@@ -628,9 +630,9 @@ function WordChainPage() {
         correct: chainEvaluation.validNodes,
         accuracy: chainEvaluation.accuracy,
         time: seconds,
-        category,
-        difficulty,
-        username: currentUser?.username,
+          category: presetCategory,
+          difficulty,
+          username: currentUser?.username,
         hintCount: 0,
         isDaily: false,
         answers,
@@ -687,7 +689,7 @@ function WordChainPage() {
 
         <div className="page-content word-chain-page">
           <div className="tag-row">
-            <span className="tag purple-light">{category}</span>
+            <span className="tag purple-light">{categoryLabel}</span>
             <span className="tag neutral">{difficulty}</span>
           </div>
 
@@ -737,6 +739,12 @@ function WordChainPage() {
                 <p>
                   <strong>Asocijacija:</strong> unesi pojam koji se logicno veze za centar.
                 </p>
+                {category === 'Sve' ? (
+                  <p>
+                    <strong>Izabrana grupa:</strong> ovaj lanac je izvucen iz kategorije{' '}
+                    {presetCategory.toLowerCase()}.
+                  </p>
+                ) : null}
               </div>
               {chainEvaluation.missingGoals.length > 0 ? (
                 <ul className="chain-goal-list">

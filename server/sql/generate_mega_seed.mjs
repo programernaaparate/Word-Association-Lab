@@ -7,6 +7,7 @@ import {
   DEFAULT_LOGIC_CHALLENGES,
   DEFAULT_RELATION_CHALLENGES,
 } from '../../src/utils/defaultGameContent.js'
+import { expandAcceptedAnswersForValue } from '../../src/utils/localSmartMatching.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -45,7 +46,7 @@ const createAssociation = (
   difficulty,
   clues,
   hint,
-  acceptedAnswers: unique([lower(word), ...acceptedAnswers.map(lower)]),
+  acceptedAnswers: unique(expandAcceptedAnswersForValue(word, acceptedAnswers).map(lower)),
 })
 
 const extraAssociations = [
@@ -498,7 +499,7 @@ const mapAssociation = (item) => ({
   difficulty: item.difficulty,
   clues: item.clues,
   hint: item.hint,
-  acceptedAnswers: unique([...(item.acceptedAnswers || []).map(lower), lower(item.word)]),
+  acceptedAnswers: unique(expandAcceptedAnswersForValue(item.word, item.acceptedAnswers || []).map(lower)),
 })
 
 const mapLogic = (item) => ({
@@ -508,6 +509,10 @@ const mapLogic = (item) => ({
   hint: item.hint,
   category: item.category,
   difficulty: item.difficulty,
+  acceptedAnswers:
+    item.mode === 'concept'
+      ? unique(expandAcceptedAnswersForValue(item.answer, item.acceptedAnswers || []).map(lower))
+      : [],
 })
 
 const mapRelation = (item) => ({
@@ -621,13 +626,13 @@ LEFT JOIN association_words existing ON LOWER(existing.word) = LOWER(seed.word)
 WHERE existing.id IS NULL;`
 
 const buildLogicInsert = (rows) => `
-INSERT INTO logic_challenges (mode, words_json, answer, hint, category, difficulty)
-SELECT seed.mode, seed.words_json, seed.answer, seed.hint, seed.category, seed.difficulty
+INSERT INTO logic_challenges (mode, words_json, answer, hint, category, difficulty, accepted_answers_json)
+SELECT seed.mode, seed.words_json, seed.answer, seed.hint, seed.category, seed.difficulty, seed.accepted_answers_json
 FROM (
 ${rows
   .map(
     (row, index) =>
-      `  ${index === 0 ? 'SELECT' : 'UNION ALL SELECT'} ${sqlString(row.mode)} AS mode, ${sqlJson(row.words)} AS words_json, ${sqlString(row.answer)} AS answer, ${sqlString(row.hint)} AS hint, ${sqlString(row.category)} AS category, ${sqlString(row.difficulty)} AS difficulty`
+      `  ${index === 0 ? 'SELECT' : 'UNION ALL SELECT'} ${sqlString(row.mode)} AS mode, ${sqlJson(row.words)} AS words_json, ${sqlString(row.answer)} AS answer, ${sqlString(row.hint)} AS hint, ${sqlString(row.category)} AS category, ${sqlString(row.difficulty)} AS difficulty, ${sqlJson(row.acceptedAnswers || [])} AS accepted_answers_json`
   )
   .join('\n')}
 ) AS seed

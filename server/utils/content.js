@@ -1,4 +1,5 @@
 import { query } from '../config/db.js'
+import { expandAcceptedAnswersForValue } from '../../src/utils/localSmartMatching.js'
 
 export const ALL_CATEGORY = 'Sve'
 export const DAILY_REWARD = 500
@@ -18,7 +19,10 @@ const CONTENT_CONFIG = {
       difficulty: item.difficulty,
       clues: parseJsonArray(item.clues_json),
       hint: item.hint,
-      acceptedAnswers: parseJsonArray(item.accepted_answers_json),
+      acceptedAnswers: expandAcceptedAnswersForValue(
+        item.word,
+        parseJsonArray(item.accepted_answers_json)
+      ),
     }),
   },
   logic: {
@@ -33,7 +37,10 @@ const CONTENT_CONFIG = {
       hint: item.hint,
       category: item.category,
       difficulty: item.difficulty,
-      acceptedAnswers: parseJsonArray(item.accepted_answers_json),
+      acceptedAnswers: expandAcceptedAnswersForValue(
+        item.answer,
+        parseJsonArray(item.accepted_answers_json)
+      ),
     }),
   },
   relation: {

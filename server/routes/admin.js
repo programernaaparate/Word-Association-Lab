@@ -8,6 +8,7 @@ import {
   getDateKey,
   resolveDailyChallenge,
 } from '../utils/content.js'
+import { expandAcceptedAnswersForValue } from '../../src/utils/localSmartMatching.js'
 
 const router = Router()
 
@@ -46,6 +47,9 @@ const parseUniqueList = (value) => {
 
   return Array.from(uniqueMap.values())
 }
+
+const buildExpandedAcceptedAnswers = (canonicalValue, values = []) =>
+  parseUniqueList(expandAcceptedAnswersForValue(canonicalValue, values))
 
 const getContentTargetTitle = (type, item = {}) => {
   if (type === 'logic') {
@@ -171,7 +175,10 @@ const buildContentPayload = (type, payload = {}) => {
     const word = String(payload.word || '').trim()
     const symbol = String(payload.symbol || '').trim()
     const clues = parseList(payload.clues)
-    const acceptedAnswers = parseUniqueList([word, ...parseList(payload.acceptedAnswers)])
+    const acceptedAnswers = buildExpandedAcceptedAnswers(word, [
+      word,
+      ...parseList(payload.acceptedAnswers),
+    ])
 
     if (!word || clues.length < 2) {
       return { error: 'Asocijacija mora imati rjesenje i makar dva traga.' }
@@ -196,7 +203,10 @@ const buildContentPayload = (type, payload = {}) => {
     const words = parseList(payload.words)
     const answer = String(payload.answer || '').trim()
     const mode = LOGIC_MODES.has(payload.mode) ? payload.mode : 'concept'
-    const acceptedAnswers = parseUniqueList([answer, ...parseList(payload.acceptedAnswers)])
+    const acceptedAnswers = buildExpandedAcceptedAnswers(answer, [
+      answer,
+      ...parseList(payload.acceptedAnswers),
+    ])
 
     if (!answer || words.length < 2) {
       return { error: 'Logicki izazov mora imati odgovor i makar dva pojma.' }
@@ -257,10 +267,13 @@ router.get('/dashboard', async (_req, res) => {
   )
 
   return res.json({
-    totalWords: associationStats.total || 0,
-    activeGames: (associationStats.total || 0) + (logicStats.total || 0) + (relationStats.total || 0),
-    pendingSubmissions: submissionStats.pendingCount || 0,
-    flaggedSubmissions: submissionStats.flaggedCount || 0,
+    totalWords: Number(associationStats.total || 0),
+    activeGames:
+      Number(associationStats.total || 0) +
+      Number(logicStats.total || 0) +
+      Number(relationStats.total || 0),
+    pendingSubmissions: Number(submissionStats.pendingCount || 0),
+    flaggedSubmissions: Number(submissionStats.flaggedCount || 0),
   })
 })
 
@@ -719,9 +732,13 @@ router.patch('/submissions/:id/status', async (req, res) => {
       )
 
       if (!alreadyExists) {
+        const nextAcceptedAnswers = buildExpandedAcceptedAnswers(nextAnswer, [
+          ...acceptedAnswers,
+          nextAnswer,
+        ])
         await query(
           'UPDATE association_words SET accepted_answers_json = ? WHERE id = ?',
-          [JSON.stringify([...acceptedAnswers, nextAnswer]), existingSubmission.content_item_id]
+          [JSON.stringify(nextAcceptedAnswers), existingSubmission.content_item_id]
         )
       }
     }

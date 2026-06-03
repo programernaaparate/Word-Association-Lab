@@ -1,4 +1,5 @@
 import { getPool } from '../config/db.js'
+import { expandAcceptedAnswersForValue } from '../../src/utils/localSmartMatching.js'
 
 export const runMigrations = async () => {
   const pool = getPool()
@@ -268,6 +269,56 @@ export const runMigrations = async () => {
           [JSON.stringify(nextAcceptedAnswers), row.id]
         )
       }
+    }
+  }
+
+  const [associationRows] = await pool.query(
+    'SELECT id, word, accepted_answers_json FROM association_words'
+  )
+
+  for (const row of associationRows) {
+    let acceptedAnswers = []
+
+    try {
+      acceptedAnswers = Array.isArray(row.accepted_answers_json)
+        ? row.accepted_answers_json
+        : JSON.parse(String(row.accepted_answers_json || '[]'))
+    } catch {
+      acceptedAnswers = []
+    }
+
+    const nextAcceptedAnswers = expandAcceptedAnswersForValue(row.word, acceptedAnswers)
+
+    if (JSON.stringify(nextAcceptedAnswers) !== JSON.stringify(acceptedAnswers)) {
+      await pool.query('UPDATE association_words SET accepted_answers_json = ? WHERE id = ?', [
+        JSON.stringify(nextAcceptedAnswers),
+        row.id,
+      ])
+    }
+  }
+
+  const [logicRows] = await pool.query(
+    "SELECT id, answer, accepted_answers_json FROM logic_challenges WHERE mode = 'concept'"
+  )
+
+  for (const row of logicRows) {
+    let acceptedAnswers = []
+
+    try {
+      acceptedAnswers = Array.isArray(row.accepted_answers_json)
+        ? row.accepted_answers_json
+        : JSON.parse(String(row.accepted_answers_json || '[]'))
+    } catch {
+      acceptedAnswers = []
+    }
+
+    const nextAcceptedAnswers = expandAcceptedAnswersForValue(row.answer, acceptedAnswers)
+
+    if (JSON.stringify(nextAcceptedAnswers) !== JSON.stringify(acceptedAnswers)) {
+      await pool.query('UPDATE logic_challenges SET accepted_answers_json = ? WHERE id = ?', [
+        JSON.stringify(nextAcceptedAnswers),
+        row.id,
+      ])
     }
   }
 

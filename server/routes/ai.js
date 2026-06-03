@@ -19,7 +19,7 @@ const buildAiUnavailableResponse = (error) => {
       accepted: false,
       confidence: 0,
       reason:
-        'AI evaluacija trenutno nije dostupna jer OpenAI nalog nema dostupan kredit ili billing nije aktivan.',
+        'Pametna provjera trenutno nije dostupna. Mozes nastaviti lokalnu provjeru ili poslati prijedlog adminu.',
     }
   }
 
@@ -32,7 +32,8 @@ const buildAiUnavailableResponse = (error) => {
       available: false,
       accepted: false,
       confidence: 0,
-      reason: 'AI evaluacija trenutno nije dostupna jer OpenAI API kljuc nije validan.',
+      reason:
+        'Pametna provjera trenutno nije dostupna. Mozes nastaviti lokalnu provjeru ili poslati prijedlog adminu.',
     }
   }
 
@@ -40,7 +41,8 @@ const buildAiUnavailableResponse = (error) => {
     available: false,
     accepted: false,
     confidence: 0,
-    reason: 'AI evaluacija trenutno nije dostupna. Pokusaj ponovo kasnije.',
+    reason:
+      'Pametna provjera trenutno nije dostupna. Mozes nastaviti lokalnu provjeru ili poslati prijedlog adminu.',
   }
 }
 
@@ -65,7 +67,8 @@ router.post('/association-answer', requireAuth, async (req, res) => {
       available: false,
       accepted: false,
       confidence: 0,
-      reason: 'AI evaluacija nije ukljucena na serveru.',
+      reason:
+        'Pametna provjera trenutno nije dostupna. Mozes nastaviti lokalnu provjeru ili poslati prijedlog adminu.',
     })
   }
 

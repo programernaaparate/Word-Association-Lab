@@ -1,3 +1,10 @@
+import {
+  DEFAULT_ASSOCIATION_WORDS,
+  DEFAULT_LOGIC_CHALLENGES,
+  DEFAULT_RELATION_CHALLENGES,
+  DEFAULT_WORD_CHAIN_PRESETS,
+} from './defaultGameContent.js'
+
 const LEGACY_TEXT_REPLACEMENTS = [
   ['â˜€ï¸', '☀️'],
   ['âš›ï¸', '⚛️'],
@@ -23,6 +30,19 @@ const LEGACY_TEXT_REPLACEMENTS = [
   ['Å¾', 'ž'],
 ]
 
+const REGIONAL_TEXT_REPLACEMENTS = [
+  ['đ', 'dj'],
+  ['Đ', 'Dj'],
+  ['č', 'c'],
+  ['Č', 'C'],
+  ['ć', 'c'],
+  ['Ć', 'C'],
+  ['ž', 'z'],
+  ['Ž', 'Z'],
+  ['š', 's'],
+  ['Š', 'S'],
+]
+
 export const repairLegacyText = (value = '') => {
   let nextValue = String(value || '')
 
@@ -33,7 +53,17 @@ export const repairLegacyText = (value = '') => {
   return nextValue
 }
 
-const TERM_ALIAS_GROUPS = [
+const transliterateRegionalText = (value = '') => {
+  let nextValue = String(value || '')
+
+  REGIONAL_TEXT_REPLACEMENTS.forEach(([source, target]) => {
+    nextValue = nextValue.split(source).join(target)
+  })
+
+  return nextValue
+}
+
+const STATIC_TERM_ALIAS_GROUPS = [
   ['astronomija', 'nauka o svemiru', 'svemirska nauka'],
   ['gravitacija', 'sila teze'],
   ['fudbal', 'nogomet'],
@@ -69,9 +99,218 @@ const TERM_ALIAS_GROUPS = [
   ['mapa', 'karta'],
   ['eksplozija', 'detonacija'],
   ['lozinka', 'sifra', 'šifra', 'password'],
+  ['reziser', 'režiser', 'reditelj'],
+  ['bioskop', 'kino', 'kino sala'],
+  ['kamera', 'filmska kamera'],
+  ['scenario', 'scenarijo', 'filmski scenario'],
+  ['montaza', 'montaža', 'obrada snimka', 'filmska montaza', 'filmska montaža'],
+  ['diplomatija', 'medjudrzavni odnosi', 'međudržavni odnosi'],
+  ['simfonija', 'orkestarska kompozicija', 'orkestarsko djelo', 'orkestarsko delo'],
+  ['perspektiva', 'prostorni prikaz'],
+  ['algoritam', 'postupak', 'niz koraka'],
+  ['mikrocip', 'mikro cip', 'cip', 'čip', 'cipset'],
+  ['atlas', 'zbirka karata'],
+  ['arhipelag', 'skup ostrva', 'grupa ostrva'],
+  ['poluostrvo', 'poluotok'],
+  ['meridijan', 'meridian'],
+  ['usce', 'ušće', 'rijecno usce', 'rečno ušće'],
+  ['rezija', 'režija'],
+  ['cirilica', 'ćirilica', 'azbuka'],
+  ['suma', 'šuma', 'gaj'],
+  ['pecina', 'pećina'],
+  ['pozoriste', 'pozorište', 'teatar'],
+  ['mreza', 'mreža', 'network', 'računarska mreža', 'racunarska mreza'],
+  ['racunar', 'računar', 'kompjuter', 'komputer', 'pc'],
+  ['kiseonik', 'oksigen'],
+  ['vulkan', 'ognjena planina'],
+  ['sunce', 'suncev disk', 'sunčev disk'],
+  ['more', 'morska povrsina', 'morska površina'],
+  ['roman', 'knjizevni roman', 'književni roman'],
+  ['zanr', 'žanr', 'vrsta', 'kategorija djela', 'kategorija dela'],
+  ['sifra', 'šifra', 'lozinka', 'password', 'passcode'],
+  ['trofej', 'pehar', 'pokal'],
+  ['medalja', 'odlikovanje', 'odlicje', 'odličje'],
+  ['vjetar', 'vetar', 'povjetarac', 'povetarac'],
+  ['kisa', 'kiša', 'padavina', 'pljusak'],
+  ['planina', 'gora'],
+  ['livada', 'poljana'],
+  ['carstvo', 'imperija'],
+  ['tvrdjava', 'tvrđava', 'utvrdjenje', 'utvrđenje'],
+  ['ustanak', 'pobuna', 'buna'],
+  ['bastina', 'baština', 'nasljedje', 'nasleđe'],
+  ['dokumentarac', 'dokumentarni film'],
+  ['trejler', 'najava filma', 'filmska najava'],
+  ['enkripcija', 'sifrovanje', 'šifrovanje', 'kriptovanje'],
+  ['pretrazivac', 'pretraživač', 'browser'],
+  ['baza podataka', 'database', 'db'],
+  ['dron', 'bespilotna letjelica', 'bespilotna letelica'],
+  ['galerija', 'izlozbeni prostor', 'izložbeni prostor'],
+  ['balet', 'plesna predstava'],
+  ['titl', 'podnaslov', 'prevod na ekranu'],
+  ['producent', 'filmski producent'],
+  ['premijera', 'prvo prikazivanje'],
+  ['kasting', 'izbor glumaca'],
+  ['animacija', 'crtani film'],
+  ['scenario', 'scenarij', 'filmski scenario', 'filmski scenarij'],
+  ['sinopsis', 'kratak sadrzaj', 'kratki sadrzaj'],
+  ['storyboard', 'knjiga snimanja', 'vizuelni plan'],
+  ['scenografija', 'dekor scene', 'scenski dekor'],
+  ['rasvjeta', 'osvjetljenje', 'osvetljenje'],
+  ['kinematografija', 'filmska produkcija', 'filmsko stvaralastvo', 'filmsko stvaralaštvo'],
+  ['trilogija', 'serijal od tri dijela', 'serijal od tri dela'],
+  ['drzava', 'zemlja'],
+  ['zaliv', 'zaljev'],
+  ['regija', 'oblast', 'podrucje', 'područje'],
+  ['klima', 'podneblje'],
+  ['laguna', 'obalna laguna'],
+  ['longituda', 'geografska duzina', 'geografska dužina'],
+  ['kartografija', 'izrada karata', 'nauka o kartama'],
+  ['topografija', 'opis terena', 'prikaz terena'],
+  ['geomorfologija', 'nauka o reljefu'],
+  ['geopolitika', 'politicka geografija', 'politička geografija'],
+  ['tjesnac', 'moreuz'],
+  ['bitka', 'boj'],
+  ['spomenik', 'monument'],
+  ['arhiv', 'arhiva'],
+  ['dinastija', 'vladarska loza'],
+  ['hronika', 'ljetopis', 'letopis'],
+  ['hronicar', 'ljetopisac', 'letopisac'],
+  ['imperator', 'car'],
+  ['reforma', 'preuredjenje', 'preuređenje'],
+  ['republika', 'drzava bez monarha', 'zemlja bez monarha'],
+  ['povelja', 'svecana isprava', 'svečana isprava'],
+  ['arheologija', 'nauka o starinama', 'nauka o starim civilizacijama'],
+  ['epruveta', 'laboratorijska cjevcica', 'laboratorijska cevcica'],
+  ['fosil', 'okamina'],
+  ['vakcina', 'cjepivo', 'cepivo'],
+  ['genetika', 'nauka o genima'],
+  ['hormon', 'hemijski glasnik', 'hemijski signal'],
+  ['meteorologija', 'nauka o vremenu', 'vremenska nauka'],
+  ['spektar', 'opseg boja', 'raspon boja'],
+  ['tektonika', 'pomjeranje ploca', 'pomeranje ploca'],
+  ['duga', 'dugin luk'],
+  ['jezero', 'stajaca voda', 'stajaća voda'],
+  ['sjeme', 'seme'],
+  ['koral', 'koralj'],
+  ['lednik', 'glecer', 'glečer'],
+  ['uvala', 'manji zaliv', 'manji zaljev'],
+  ['atmosfera', 'vazdusni omotac', 'vazdušni omotač'],
+  ['biosfera', 'zivi omotac zemlje', 'živi omotač zemlje'],
+  ['ekosistem', 'zivotna zajednica', 'životna zajednica'],
+  ['erozija', 'spiranje tla'],
+  ['gejzir', 'vreli izvor'],
+  ['mahovina', 'niska biljka'],
+  ['plima', 'porast mora', 'rast nivoa mora'],
+  ['sediment', 'talog'],
+  ['kosarka', 'košarka'],
+  ['odbojka', 'volejbol', 'volleyball'],
+  ['plivanje', 'plivacka disciplina', 'plivačka disciplina'],
+  ['stadion', 'sportska arena'],
+  ['trening', 'vjezba', 'vežba'],
+  ['kapiten', 'vodja tima', 'vođa tima'],
+  ['ofsajd', 'zaledje', 'zaleđe'],
+  ['penal', 'kazneni udarac'],
+  ['turnir', 'takmicenje', 'takmičenje'],
+  ['regata', 'jedrilicarska trka', 'jedriličarska trka'],
+  ['desetoboj', 'deset disciplina'],
+  ['aplikacija', 'app', 'program'],
+  ['procesor', 'cpu'],
+  ['server', 'posluzilac', 'poslužilac'],
+  ['ruter', 'usmjerivac', 'usmerivač'],
+  ['interfejs', 'korisnicki interfejs', 'korisnički interfejs'],
+  ['protokol', 'skup pravila'],
+  ['bekap', 'rezervna kopija', 'backup'],
+  ['kompajler', 'prevodilac koda'],
+  ['latencija', 'kasnjenje', 'kašnjenje'],
+  ['satelit', 'vestacki satelit', 'veštački satelit'],
+  ['virtuelizacija', 'virtualizacija'],
+  ['basna', 'prica s poukom', 'priča s poukom'],
+  ['strip', 'komiks'],
+  ['portret', 'likovni prikaz osobe'],
+  ['mural', 'zidna slika'],
+  ['arija', 'operska solo dionica', 'operska solo deonica'],
+  ['recital', 'javni nastup'],
+  ['gravura', 'urezani otisak', 'urezani otisak'],
+  ['instalacija', 'prostorna postavka'],
+  ['kompozicija', 'raspored elemenata'],
+  ['kontrast', 'suprotnost u prikazu'],
+  ['minimalizam', 'svedeni stil'],
+  ['impresionizam', 'slikarski pravac svjetlosti', 'slikarski pravac svetlosti'],
+  ['ekspresionizam', 'umjetnost izraza', 'umetnost izraza'],
+  ['monarhija', 'vladavina kralja', 'kraljevska vlast'],
+  ['reljef', 'oblik terena', 'konfiguracija terena'],
+  ['slikarstvo', 'likovna umjetnost', 'likovna umetnost', 'umjetnost slikanja', 'umetnost slikanja'],
+  ['film', 'pokretne slike'],
+  ['astronomija', 'proucavanje svemira', 'proučavanje svemira'],
+  ['egipat', 'staroegipatska civilizacija'],
+  ['zivotinja', 'zivo bice', 'živo biće'],
+  ['voda', 'tecnost zivota', 'tečnost života'],
+  ['softver', 'aplikativni program', 'digitalni program'],
+  ['atelje', 'studio umjetnika', 'studio umetnika', 'slikarski studio'],
+  ['audicija', 'probno snimanje', 'glumacka proba', 'glumačka proba'],
+  ['automatizacija', 'automatika procesa', 'automatika'],
+  ['avangarda', 'napredni pravac', 'radikalni pravac'],
+  ['boks', 'borilacki sport', 'borilački sport'],
+  ['civilizacija', 'razvijeno drustvo', 'razvijeno društvo'],
+  ['delta', 'rijecna delta', 'rečna delta'],
+  ['drama', 'dramsko djelo', 'dramsko delo'],
+  ['element', 'hemijski element', 'kemijski element'],
+  ['entropija', 'mjera nereda', 'mera nereda'],
+  ['festival', 'smotra umjetnosti', 'smotra umetnosti'],
+  ['finale', 'zavrsnica', 'završnica'],
+  ['formula', 'jednacina', 'jednačina'],
+  ['galaksija', 'zvjezdani sistem', 'zvezdani sistem'],
+  ['globus', 'model zemlje', 'model Zemlje'],
+  ['granica', 'medja', 'međa'],
+  ['hokej', 'sport na ledu'],
+  ['hronologija', 'redosljed dogadjaja', 'redosled događaja'],
+  ['izvor', 'vrelo'],
+  ['jedrenje', 'plovidba na jedra'],
+  ['kadrovanje', 'kompozicija kadra'],
+  ['kajak', 'mali camac', 'mali čamac'],
+  ['kanal', 'vodeni prolaz'],
+  ['kanjon', 'duboka klisura'],
+  ['katalizator', 'ubrzivac reakcije', 'ubrzivač reakcije'],
+  ['kibernetika', 'nauka o upravljanju sistemima'],
+  ['kolonizacija', 'naseljavanje teritorija'],
+  ['komedija', 'humoristicki film', 'humoristički film'],
+  ['kondicija', 'fizicka sprema', 'fizička sprema'],
+  ['koreografija', 'plesni raspored'],
+  ['kostim', 'scenska odjeca', 'scenska odeća'],
+  ['kraljevina', 'drzava kralja', 'država kralja'],
+  ['kursor', 'pokazivac misa', 'pokazivač miša'],
+  ['laboratorija', 'lab', 'naucna laboratorija', 'naučna laboratorija'],
+  ['legija', 'vojna jedinica'],
+  ['magnet', 'magnetni predmet'],
+  ['manifest', 'programski tekst', 'javna izjava načela', 'javna izjava nacela'],
+  ['maraton', 'duga trka', 'duga utrka'],
+  ['maska', 'krinka'],
+  ['mikroskop', 'povecalo za sitno', 'povećalo za sitno'],
+  ['mizanscen', 'mizanscen scena', 'raspored na sceni'],
+  ['molekul', 'skup atoma'],
+  ['mozaik', 'slika od sitnih djelova', 'slika od sitnih delova'],
+  ['munja', 'gromoviti bljesak', 'gromoviti bljesak'],
+  ['neuron', 'nervna celija', 'nervna ćelija'],
+  ['okean', 'svjetsko more', 'svetsko more'],
+  ['opsada', 'okruzenje grada', 'okruženje grada'],
+  ['orbita', 'putanja oko tijela', 'putanja oko tela'],
+  ['piramida', 'egipatska grobnica', 'stepenasta gradjevina', 'stepenasta građevina'],
+  ['platno', 'bioskopsko platno', 'slikarsko platno'],
+  ['postprodukcija', 'zavrsna obrada filma', 'završna obrada filma'],
+  ['potok', 'manji vodotok'],
+  ['pustinja', 'suha oblast', 'suva oblast'],
+  ['ravnica', 'ravan predio', 'ravan predeo'],
+  ['reket', 'teniski reket'],
+  ['renesansa', 'preporod'],
+  ['revolucija', 'prevrat'],
+  ['robot', 'automat'],
+  ['rt', 'izbočina kopna', 'izbocina kopna'],
+  ['senzor', 'detektor'],
+  ['teorija', 'naucno objasnjenje', 'naučno objašnjenje'],
+  ['vitez', 'srednjovjekovni ratnik', 'srednjovekovni ratnik'],
 ]
 
-const RELATED_CONCEPT_GROUPS = [
+const STATIC_RELATED_CONCEPT_GROUPS = [
   [
     'film',
     'kinematografija',
@@ -112,6 +351,53 @@ const RELATED_CONCEPT_GROUPS = [
   ['umjetnost', 'muzika', 'simfonija', 'pozoriste', 'pozorište', 'teatar', 'skulptura', 'perspektiva'],
 ]
 
+const buildGroupsFromAcceptedAnswers = () => {
+  const groups = []
+
+  DEFAULT_ASSOCIATION_WORDS.forEach((item) => {
+    const group = [item.word, ...(item.acceptedAnswers || [])].filter(Boolean)
+    if (group.length > 1) {
+      groups.push(group)
+    }
+  })
+
+  DEFAULT_LOGIC_CHALLENGES.forEach((item) => {
+    if (item.mode !== 'concept') {
+      return
+    }
+
+    const group = [item.answer, ...(item.acceptedAnswers || [])].filter(Boolean)
+    if (group.length > 1) {
+      groups.push(group)
+    }
+  })
+
+  return groups
+}
+
+const buildGroupsFromRelations = (relationType) =>
+  DEFAULT_RELATION_CHALLENGES.filter((item) => item.relation === relationType).map((item) => [
+    item.leftWord,
+    item.rightWord,
+  ])
+
+const buildGroupsFromWordChainPresets = (relationType) =>
+  Object.values(DEFAULT_WORD_CHAIN_PRESETS).flatMap((presets) =>
+    presets
+      .map((preset) => [
+        preset.centerWord,
+        ...preset.starterNodes
+          .filter((node) => node.relation === relationType)
+          .map((node) => node.word),
+      ])
+      .filter((group) => group.length > 1)
+  )
+
+const buildGroupsFromAssociationClues = () =>
+  DEFAULT_ASSOCIATION_WORDS.map((item) => [item.word, ...(item.clues || [])]).filter(
+    (group) => group.length > 1
+  )
+
 const COMMON_ANSWER_PREFIXES = [
   'to je',
   'ovo je',
@@ -126,7 +412,7 @@ const COMMON_ANSWER_PREFIXES = [
 ]
 
 const normalizeBaseText = (value = '') =>
-  repairLegacyText(value)
+  transliterateRegionalText(repairLegacyText(value))
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -143,6 +429,84 @@ const toCollapsedCompactText = (value = '') =>
   toCompactText(collapseRepeatedCharacters(value))
 
 const tokenize = (value = '') => normalizeBaseText(value).split(' ').filter(Boolean)
+
+const buildNormalizedComponentLookup = (groups = []) => {
+  const adjacency = new Map()
+
+  groups.forEach((group) => {
+    const normalizedGroup = [...new Set(group.map(normalizeBaseText).filter(Boolean))]
+
+    normalizedGroup.forEach((term) => {
+      if (!adjacency.has(term)) {
+        adjacency.set(term, new Set())
+      }
+    })
+
+    normalizedGroup.forEach((term) => {
+      const neighbors = adjacency.get(term)
+      normalizedGroup.forEach((neighbor) => {
+        if (neighbor !== term) {
+          neighbors.add(neighbor)
+        }
+      })
+    })
+  })
+
+  const componentLookup = new Map()
+  const visited = new Set()
+
+  adjacency.forEach((_neighbors, startTerm) => {
+    if (visited.has(startTerm)) {
+      return
+    }
+
+    const stack = [startTerm]
+    const component = []
+    visited.add(startTerm)
+
+    while (stack.length) {
+      const current = stack.pop()
+      component.push(current)
+
+      ;(adjacency.get(current) || []).forEach((neighbor) => {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor)
+          stack.push(neighbor)
+        }
+      })
+    }
+
+    const uniqueComponent = [...new Set(component)].sort()
+    uniqueComponent.forEach((term) => {
+      componentLookup.set(term, uniqueComponent)
+    })
+  })
+
+  return componentLookup
+}
+
+const buildNormalizedUnionLookup = (groups = []) => {
+  const lookup = new Map()
+
+  groups.forEach((group) => {
+    const normalizedGroup = [...new Set(group.map(normalizeBaseText).filter(Boolean))]
+
+    normalizedGroup.forEach((term) => {
+      if (!lookup.has(term)) {
+        lookup.set(term, new Set())
+      }
+
+      const currentSet = lookup.get(term)
+      normalizedGroup.forEach((item) => {
+        currentSet.add(item)
+      })
+    })
+  })
+
+  return new Map(
+    Array.from(lookup.entries()).map(([term, values]) => [term, [...values].sort()])
+  )
+}
 
 const stripAnswerFraming = (value = '') => {
   const normalizedValue = normalizeBaseText(value)
@@ -218,37 +582,50 @@ const isSmallTypoMatch = (leftValue = '', rightValue = '') => {
   return distance <= 2
 }
 
-const buildAliasLookup = () => {
-  const aliasLookup = new Map()
+const LINKING_TOKENS = new Set(['o', 'u', 'i', 'na', 'sa', 'za', 'od', 'do', 'po', 'ka', 'ko'])
 
-  TERM_ALIAS_GROUPS.forEach((group) => {
-    const normalizedGroup = [...new Set(group.map(normalizeBaseText).filter(Boolean))]
+const isLikelyBrokenSplitVariant = (value = '', referenceAliases = []) => {
+  const normalizedValue = normalizeBaseText(value)
 
-    normalizedGroup.forEach((term) => {
-      aliasLookup.set(term, normalizedGroup)
-    })
+  if (!normalizedValue.includes(' ')) {
+    return false
+  }
+
+  const tokens = tokenize(normalizedValue)
+
+  if (!tokens.length || tokens.some((token) => LINKING_TOKENS.has(token))) {
+    return false
+  }
+
+  const compactValue = normalizedValue.replace(/\s+/g, '')
+
+  return (referenceAliases || []).some((alias) => {
+    const compactAlias = normalizeBaseText(alias).replace(/\s+/g, '')
+
+    if (!compactAlias || compactAlias === compactValue) {
+      return false
+    }
+
+    return isSmallTypoMatch(compactValue, compactAlias)
   })
-
-  return aliasLookup
 }
 
-const ALIAS_LOOKUP = buildAliasLookup()
+const TERM_ALIAS_GROUPS = [
+  ...STATIC_TERM_ALIAS_GROUPS,
+  ...buildGroupsFromAcceptedAnswers(),
+  ...buildGroupsFromRelations('Sinonim'),
+  ...buildGroupsFromWordChainPresets('Sinonim'),
+]
 
-const buildRelatedLookup = () => {
-  const relatedLookup = new Map()
+const RELATED_CONCEPT_GROUPS = [
+  ...STATIC_RELATED_CONCEPT_GROUPS,
+  ...buildGroupsFromRelations('Asocijacija'),
+  ...buildGroupsFromWordChainPresets('Asocijacija'),
+  ...buildGroupsFromAssociationClues(),
+]
 
-  RELATED_CONCEPT_GROUPS.forEach((group) => {
-    const normalizedGroup = [...new Set(group.map(normalizeBaseText).filter(Boolean))]
-
-    normalizedGroup.forEach((term) => {
-      relatedLookup.set(term, normalizedGroup)
-    })
-  })
-
-  return relatedLookup
-}
-
-const RELATED_LOOKUP = buildRelatedLookup()
+const ALIAS_LOOKUP = buildNormalizedComponentLookup(TERM_ALIAS_GROUPS)
+const RELATED_LOOKUP = buildNormalizedUnionLookup(RELATED_CONCEPT_GROUPS)
 
 const expandAliases = (value = '') => {
   const normalizedValue = normalizeBaseText(value)
@@ -257,6 +634,43 @@ const expandAliases = (value = '') => {
   }
 
   return ALIAS_LOOKUP.get(normalizedValue) || [normalizedValue]
+}
+
+const buildStoredAnswerVariants = (value = '') => {
+  const repairedValue = repairLegacyText(value).trim()
+  const normalizedValue = normalizeBaseText(repairedValue)
+  const lowercaseValue = repairedValue.toLowerCase()
+  const compactValue = repairedValue.replace(/\s+/g, ' ').trim()
+
+  return [...new Set([repairedValue, compactValue, lowercaseValue, normalizedValue].filter(Boolean))]
+}
+
+export const expandAcceptedAnswersForValue = (canonicalValue = '', acceptedAnswers = []) => {
+  const allCandidates = [canonicalValue, ...(acceptedAnswers || [])].filter(Boolean)
+  const canonicalAliases = expandAliases(canonicalValue)
+  const normalizedKeys = new Set()
+  const expandedAnswers = []
+
+  allCandidates.forEach((candidate) => {
+    if (candidate !== canonicalValue && isLikelyBrokenSplitVariant(candidate, canonicalAliases)) {
+      return
+    }
+
+    expandAliases(candidate).forEach((alias) => {
+      buildStoredAnswerVariants(alias).forEach((variant) => {
+        const normalizedKey = normalizeBaseText(variant)
+
+        if (!normalizedKey || normalizedKeys.has(normalizedKey)) {
+          return
+        }
+
+        normalizedKeys.add(normalizedKey)
+        expandedAnswers.push(variant)
+      })
+    })
+  })
+
+  return expandedAnswers
 }
 
 const buildComparableVariants = (value = '') => {
