@@ -582,6 +582,7 @@ function LogicChallengePage() {
         const aiEvaluation = await evaluateAiConceptAnswerRequest(token, {
           words: currentChallenge.words,
           canonicalAnswer: currentChallenge.answer,
+          acceptedAnswers: currentChallenge.acceptedAnswers || [],
           submittedAnswer: trimmedAnswer,
           category: currentChallenge.category,
           difficulty: currentChallenge.difficulty || difficulty,

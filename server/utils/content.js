@@ -23,7 +23,7 @@ const CONTENT_CONFIG = {
   },
   logic: {
     table: 'logic_challenges',
-    select: 'id, mode, words_json, answer, hint, category, difficulty',
+    select: 'id, mode, words_json, answer, hint, category, difficulty, accepted_answers_json',
     orderBy: 'id ASC',
     mapRow: (item) => ({
       id: item.id,
@@ -33,6 +33,7 @@ const CONTENT_CONFIG = {
       hint: item.hint,
       category: item.category,
       difficulty: item.difficulty,
+      acceptedAnswers: parseJsonArray(item.accepted_answers_json),
     }),
   },
   relation: {

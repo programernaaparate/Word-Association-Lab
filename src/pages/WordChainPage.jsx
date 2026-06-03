@@ -341,6 +341,9 @@ function WordChainPage() {
     [allowedNodes, centerWord, difficulty, nodes]
   )
   const canFinishChain = chainEvaluation.hasMinimumNodes && chainEvaluation.hasAllRelations
+  const chainFinishHint = canFinishChain
+    ? 'Lanac je spreman. Mozes bezbjedno da zavrsis rundu.'
+    : `Za zavrsetak ti jos fale: ${chainEvaluation.missingGoals.join(' ')}`
 
   const helpSections = [
     {
@@ -577,94 +580,99 @@ function WordChainPage() {
       return
     }
 
-    const answers = chainEvaluation.evaluatedNodes.map((node) => ({
-      prompt: centerWord,
-      answer: `${node.relation}: ${node.word}`,
-      accepted: node.accepted,
-      relation: node.relation,
-      roundDifficulty: difficulty,
-    }))
+    try {
+      const answers = chainEvaluation.evaluatedNodes.map((node) => ({
+        prompt: centerWord,
+        answer: `${node.relation}: ${node.word}`,
+        accepted: node.accepted,
+        relation: node.relation,
+        roundDifficulty: difficulty,
+      }))
 
-    const elapsedMs = new Date().getTime() - new Date(startedAt).getTime()
-    const seconds = Math.max(1, Math.floor(elapsedMs / 1000))
-    const currentUser = getCurrentUser()
-    const previousProgress = getPlayerProgressOverview()
-    const performanceBonus = calculatePerformanceBonus({
-      difficulty,
-      total: Math.max(nodes.length, 4),
-      correct: chainEvaluation.validNodes,
-      time: seconds,
-      hintCount: 0,
-      type: 'word-chain',
-    })
-    const finalEarnedPoints = chainEvaluation.earnedPoints + performanceBonus
+      const elapsedMs = new Date().getTime() - new Date(startedAt).getTime()
+      const seconds = Math.max(1, Math.floor(elapsedMs / 1000))
+      const currentUser = getCurrentUser()
+      const previousProgress = getPlayerProgressOverview()
+      const performanceBonus = calculatePerformanceBonus({
+        difficulty,
+        total: Math.max(nodes.length, 4),
+        correct: chainEvaluation.validNodes,
+        time: seconds,
+        hintCount: 0,
+        type: 'word-chain',
+      })
+      const finalEarnedPoints = chainEvaluation.earnedPoints + performanceBonus
 
-    const result = {
-      type: 'word-chain',
-      score: finalEarnedPoints,
-      earnedPoints: finalEarnedPoints,
-      performanceBonus,
-      total: Math.max(nodes.length, 4),
-      correct: chainEvaluation.validNodes,
-      accuracy: chainEvaluation.accuracy,
-      time: seconds,
-      category,
-      difficulty,
-      answers,
+      const result = {
+        type: 'word-chain',
+        score: finalEarnedPoints,
+        earnedPoints: finalEarnedPoints,
+        performanceBonus,
+        total: Math.max(nodes.length, 4),
+        correct: chainEvaluation.validNodes,
+        accuracy: chainEvaluation.accuracy,
+        time: seconds,
+        category,
+        difficulty,
+        answers,
+      }
+
+      const historyEntry = {
+        type: 'word-chain',
+        score: finalEarnedPoints,
+        earnedPoints: result.earnedPoints,
+        awardedPoints: result.earnedPoints,
+        roundScore: finalEarnedPoints,
+        performanceBonus,
+        total: Math.max(nodes.length, 4),
+        correct: chainEvaluation.validNodes,
+        accuracy: chainEvaluation.accuracy,
+        time: seconds,
+        category,
+        difficulty,
+        username: currentUser?.username,
+        hintCount: 0,
+        isDaily: false,
+        answers,
+      }
+
+      const submission = {
+        gameType: 'Lanac rijeci',
+        content: `${centerWord} -> ${nodes
+          .map((item) => `${item.relation}:${item.word}`)
+          .join(', ')}`,
+        points: result.earnedPoints,
+        time: seconds,
+        isDaily: false,
+      }
+
+      const syncResult = await syncCompletedGame({ historyEntry, submission })
+      const finalHistoryEntry = syncResult.historyEntry
+      const progressSnapshot = getPlayerProgressOverview()
+      const newAchievements = getNewUnlockedAchievements(previousProgress, progressSnapshot)
+
+      saveLastResult({
+        ...result,
+        score: finalHistoryEntry.score ?? result.score,
+        earnedPoints: finalHistoryEntry.earnedPoints ?? result.earnedPoints,
+        performanceBonus: finalHistoryEntry.performanceBonus ?? result.performanceBonus,
+        total: finalHistoryEntry.total ?? result.total,
+        correct: finalHistoryEntry.correct ?? result.correct,
+        accuracy: finalHistoryEntry.accuracy ?? result.accuracy,
+        time: finalHistoryEntry.time ?? result.time,
+        progressSnapshot,
+        newAchievements,
+        dailyReward: finalHistoryEntry.dailyReward || 0,
+        awardedPoints: finalHistoryEntry.awardedPoints ?? result.earnedPoints,
+      })
+
+      playCelebrateSound()
+      clearActiveSession()
+      navigate('/results')
+    } catch {
+      setChainMessage('Zavrsetak lanca trenutno nije uspio. Pokusaj ponovo za trenutak.')
+      playErrorSound()
     }
-
-    const historyEntry = {
-      type: 'word-chain',
-      score: finalEarnedPoints,
-      earnedPoints: result.earnedPoints,
-      awardedPoints: result.earnedPoints,
-      roundScore: finalEarnedPoints,
-      performanceBonus,
-      total: Math.max(nodes.length, 4),
-      correct: chainEvaluation.validNodes,
-      accuracy: chainEvaluation.accuracy,
-      time: seconds,
-      category,
-      difficulty,
-      username: currentUser?.username,
-      hintCount: 0,
-      isDaily: false,
-      answers,
-    }
-
-    const submission = {
-      gameType: 'Lanac rijeci',
-      content: `${centerWord} -> ${nodes
-        .map((item) => `${item.relation}:${item.word}`)
-        .join(', ')}`,
-      points: result.earnedPoints,
-      time: seconds,
-      isDaily: false,
-    }
-
-    const syncResult = await syncCompletedGame({ historyEntry, submission })
-    const finalHistoryEntry = syncResult.historyEntry
-    const progressSnapshot = getPlayerProgressOverview()
-    const newAchievements = getNewUnlockedAchievements(previousProgress, progressSnapshot)
-
-    saveLastResult({
-      ...result,
-      score: finalHistoryEntry.score ?? result.score,
-      earnedPoints: finalHistoryEntry.earnedPoints ?? result.earnedPoints,
-      performanceBonus: finalHistoryEntry.performanceBonus ?? result.performanceBonus,
-      total: finalHistoryEntry.total ?? result.total,
-      correct: finalHistoryEntry.correct ?? result.correct,
-      accuracy: finalHistoryEntry.accuracy ?? result.accuracy,
-      time: finalHistoryEntry.time ?? result.time,
-      progressSnapshot,
-      newAchievements,
-      dailyReward: finalHistoryEntry.dailyReward || 0,
-      awardedPoints: finalHistoryEntry.awardedPoints ?? result.earnedPoints,
-    })
-
-    playCelebrateSound()
-    clearActiveSession()
-    navigate('/results')
   }
 
   return (
@@ -854,15 +862,14 @@ function WordChainPage() {
               Ocisti lanac
             </button>
 
-            <button
-              className="primary-btn"
-              onClick={handleFinish}
-              type="button"
-              disabled={!canFinishChain}
-            >
+            <button className="primary-btn" onClick={handleFinish} type="button">
               Zavrsi lanac
             </button>
           </div>
+
+          <p className={`chain-footer-note ${canFinishChain ? 'ok' : 'warn'}`}>
+            {chainFinishHint}
+          </p>
         </div>
 
         <GameHelpModal

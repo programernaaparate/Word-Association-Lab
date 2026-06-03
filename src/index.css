@@ -2816,6 +2816,26 @@ body.native-app .bottom-nav {
   margin: 10px 0 0;
 }
 
+.chain-footer-note {
+  margin: 12px 2px 0;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid #e6ebf2;
+  line-height: 1.45;
+}
+
+.chain-footer-note.ok {
+  background: #eef9f1;
+  border-color: #d6ebdc;
+  color: #3b9158;
+}
+
+.chain-footer-note.warn {
+  background: #fff8ef;
+  border-color: #f2e1bf;
+  color: #996d21;
+}
+
 .explore-summary-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

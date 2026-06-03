@@ -196,6 +196,7 @@ const buildContentPayload = (type, payload = {}) => {
     const words = parseList(payload.words)
     const answer = String(payload.answer || '').trim()
     const mode = LOGIC_MODES.has(payload.mode) ? payload.mode : 'concept'
+    const acceptedAnswers = parseUniqueList([answer, ...parseList(payload.acceptedAnswers)])
 
     if (!answer || words.length < 2) {
       return { error: 'Logicki izazov mora imati odgovor i makar dva pojma.' }
@@ -211,6 +212,7 @@ const buildContentPayload = (type, payload = {}) => {
           'Pokusaj da pronadjes zajednicku osobinu.',
         category: String(payload.category || 'Priroda').trim() || 'Priroda',
         difficulty: String(payload.difficulty || 'Lako').trim() || 'Lako',
+        acceptedAnswers,
       },
     }
   }
@@ -476,8 +478,8 @@ router.post('/content/:type', async (req, res) => {
   } else if (type === 'logic') {
     result = await query(
       `INSERT INTO logic_challenges
-        (mode, words_json, answer, hint, category, difficulty)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+        (mode, words_json, answer, hint, category, difficulty, accepted_answers_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         values.mode,
         JSON.stringify(values.words),
@@ -485,6 +487,7 @@ router.post('/content/:type', async (req, res) => {
         values.hint,
         values.category,
         values.difficulty,
+        JSON.stringify(values.acceptedAnswers),
       ]
     )
   } else if (type === 'relation') {
@@ -534,7 +537,7 @@ router.put('/content/:type/:id', async (req, res) => {
   } else if (type === 'logic') {
     await query(
       `UPDATE logic_challenges
-       SET mode = ?, words_json = ?, answer = ?, hint = ?, category = ?, difficulty = ?
+       SET mode = ?, words_json = ?, answer = ?, hint = ?, category = ?, difficulty = ?, accepted_answers_json = ?
        WHERE id = ?`,
       [
         values.mode,
@@ -543,6 +546,7 @@ router.put('/content/:type/:id', async (req, res) => {
         values.hint,
         values.category,
         values.difficulty,
+        JSON.stringify(values.acceptedAnswers),
         id,
       ]
     )

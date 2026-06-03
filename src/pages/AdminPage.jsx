@@ -159,6 +159,7 @@ const getEmptyCreateForm = (kind) => {
       mode: 'concept',
       wordsText: '',
       answer: '',
+      acceptedAnswersText: '',
       hint: '',
       category: 'Priroda',
       difficulty: 'Lako',
@@ -196,6 +197,7 @@ const buildContentDraft = (item) => {
     return {
       ...item,
       wordsText: (item.words || []).join(', '),
+      acceptedAnswersText: (item.acceptedAnswers || []).join(', '),
     }
   }
 
@@ -656,6 +658,7 @@ function AdminPage() {
           mode: currentCreateForm.mode,
           words: nextWords,
           answer: nextAnswer,
+          acceptedAnswers: [nextAnswer, ...parseList(currentCreateForm.acceptedAnswersText)],
           hint:
             currentCreateForm.hint.trim() ||
             'Pokusaj da pronadjes zajednicku osobinu.',
@@ -734,6 +737,7 @@ function AdminPage() {
           mode: contentDraft.mode,
           words: nextWords,
           answer: nextAnswer,
+          acceptedAnswers: [nextAnswer, ...parseList(contentDraft.acceptedAnswersText)],
           hint:
             String(contentDraft.hint || '').trim() ||
             'Pokusaj da pronadjes zajednicku osobinu.',
@@ -960,6 +964,15 @@ function AdminPage() {
             value={currentCreateForm.wordsText}
             onChange={(event) => updateCreateFormField('wordsText', event.target.value)}
             placeholder="Prica, Kratak opis, Radnja"
+          />
+
+          <label htmlFor="admin-create-logic-accepted">Prihvatljivi odgovori</label>
+          <textarea
+            id="admin-create-logic-accepted"
+            className="admin-textarea"
+            value={currentCreateForm.acceptedAnswersText || ''}
+            onChange={(event) => updateCreateFormField('acceptedAnswersText', event.target.value)}
+            placeholder="lozinka, sifra, šifra"
           />
 
           <label htmlFor="admin-create-logic-hint">Pomoc</label>
@@ -1734,6 +1747,24 @@ function AdminPage() {
                               value={contentDraft.wordsText || ''}
                               onChange={(event) => updateContentDraftField('wordsText', event.target.value)}
                             />
+
+                            <label htmlFor="admin-edit-logic-accepted">Prihvatljivi odgovori</label>
+                            <textarea
+                              id="admin-edit-logic-accepted"
+                              className="admin-textarea"
+                              value={contentDraft.acceptedAnswersText || ''}
+                              onChange={(event) =>
+                                updateContentDraftField('acceptedAnswersText', event.target.value)
+                              }
+                            />
+
+                            <div className="admin-tag-row">
+                              {parseList(contentDraft.acceptedAnswersText || '').map((answer) => (
+                                <span className="admin-mini-tag accent" key={answer}>
+                                  {answer}
+                                </span>
+                              ))}
+                            </div>
                           </>
                         ) : null}
 

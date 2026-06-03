@@ -93,7 +93,8 @@ router.post('/association-answer', requireAuth, async (req, res) => {
 })
 
 router.post('/concept-answer', requireAuth, async (req, res) => {
-  const { words, canonicalAnswer, submittedAnswer, category, difficulty } = req.body || {}
+  const { words, canonicalAnswer, acceptedAnswers, submittedAnswer, category, difficulty } =
+    req.body || {}
 
   if (!Array.isArray(words) || !String(submittedAnswer || '').trim()) {
     return res.status(400).json({ message: 'Nedostaju podaci za AI procjenu odgovora.' })
@@ -112,6 +113,7 @@ router.post('/concept-answer', requireAuth, async (req, res) => {
     const result = await evaluateConceptAnswerWithAi({
       words,
       canonicalAnswer,
+      acceptedAnswers: Array.isArray(acceptedAnswers) ? acceptedAnswers : [],
       submittedAnswer,
       category,
       difficulty,

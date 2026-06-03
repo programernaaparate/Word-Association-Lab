@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS logic_challenges (
   hint TEXT NULL,
   category VARCHAR(80) NOT NULL,
   difficulty VARCHAR(40) NOT NULL,
+  accepted_answers_json JSON NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

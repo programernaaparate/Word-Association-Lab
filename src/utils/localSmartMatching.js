@@ -68,6 +68,7 @@ const TERM_ALIAS_GROUPS = [
   ['pravac', 'smjer', 'smer', 'kurs'],
   ['mapa', 'karta'],
   ['eksplozija', 'detonacija'],
+  ['lozinka', 'sifra', 'šifra', 'password'],
 ]
 
 const RELATED_CONCEPT_GROUPS = [

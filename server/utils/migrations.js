@@ -9,6 +9,7 @@ export const runMigrations = async () => {
   const logicHintBackfill = [
     ['Hormon', 'Hemijski signal koji upravlja mnogim procesima u tijelu.'],
   ]
+  const logicAcceptedAnswersBackfill = [['Lozinka', ['lozinka', 'šifra', 'sifra']]]
   const associationSymbolBackfill = [
     ['Sunce', '☀️'],
     ['More', '🌊'],
@@ -38,6 +39,9 @@ export const runMigrations = async () => {
   )
   const [submissionKindColumns] = await pool.query(
     "SHOW COLUMNS FROM game_submissions LIKE 'submission_kind'"
+  )
+  const [logicAcceptedAnswersColumns] = await pool.query(
+    "SHOW COLUMNS FROM logic_challenges LIKE 'accepted_answers_json'"
   )
   const [submissionContentTypeColumns] = await pool.query(
     "SHOW COLUMNS FROM game_submissions LIKE 'content_type'"
@@ -109,6 +113,12 @@ export const runMigrations = async () => {
   if (!submissionKindColumns.length) {
     await pool.query(
       "ALTER TABLE game_submissions ADD COLUMN submission_kind VARCHAR(30) NOT NULL DEFAULT 'game' AFTER is_daily"
+    )
+  }
+
+  if (!logicAcceptedAnswersColumns.length) {
+    await pool.query(
+      'ALTER TABLE logic_challenges ADD COLUMN accepted_answers_json JSON NULL AFTER difficulty'
     )
   }
 
@@ -217,6 +227,48 @@ export const runMigrations = async () => {
       'UPDATE logic_challenges SET hint = ? WHERE LOWER(answer) = LOWER(?)',
       [hint, answer]
     )
+  }
+
+  await pool.query(
+    'UPDATE logic_challenges SET accepted_answers_json = JSON_ARRAY(answer) WHERE accepted_answers_json IS NULL'
+  )
+
+  for (const [answer, answersToAdd] of logicAcceptedAnswersBackfill) {
+    const [rows] = await pool.query(
+      "SELECT id, accepted_answers_json FROM logic_challenges WHERE LOWER(answer) = LOWER(?) AND mode = 'concept'",
+      [answer]
+    )
+
+    for (const row of rows) {
+      let acceptedAnswers = []
+
+      try {
+        acceptedAnswers = Array.isArray(row.accepted_answers_json)
+          ? row.accepted_answers_json
+          : JSON.parse(String(row.accepted_answers_json || '[]'))
+      } catch {
+        acceptedAnswers = []
+      }
+
+      const nextAcceptedAnswers = [...acceptedAnswers]
+
+      answersToAdd.forEach((item) => {
+        const alreadyExists = nextAcceptedAnswers.some(
+          (existing) => String(existing || '').trim().toLowerCase() === String(item).toLowerCase()
+        )
+
+        if (!alreadyExists) {
+          nextAcceptedAnswers.push(item)
+        }
+      })
+
+      if (nextAcceptedAnswers.length !== acceptedAnswers.length) {
+        await pool.query(
+          'UPDATE logic_challenges SET accepted_answers_json = ? WHERE id = ?',
+          [JSON.stringify(nextAcceptedAnswers), row.id]
+        )
+      }
+    }
   }
 
   await pool.query(

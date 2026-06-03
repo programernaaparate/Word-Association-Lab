@@ -92,6 +92,14 @@ function HomePage() {
   const [dailyDateKey, setDailyDateKey] = useState(() => getTodayKey())
   const hasContinuableSession = Boolean(activeSession?.type) && !isExpiredDailySession(activeSession)
   const hasSavedWordChainSession = activeSession?.type === 'word-chain'
+  const savedWordChainDifficulty =
+    activeSession?.sessionDifficulty || activeSession?.difficulty || selectedDifficulty
+  const savedWordChainCategory =
+    activeSession?.sessionCategory || activeSession?.category || selectedCategory
+  const hasMatchingSavedWordChainSession =
+    hasSavedWordChainSession &&
+    savedWordChainDifficulty === selectedDifficulty &&
+    savedWordChainCategory === selectedCategory
   const historyPoints = getCurrentUserGameHistory().reduce(
     (sum, item) => sum + Math.max(0, Number(item.awardedPoints ?? item.earnedPoints ?? 0) || 0),
     0
@@ -112,7 +120,9 @@ function HomePage() {
           ? 'Dnevni izazov trenutno nije dostupan, ali ostali modovi rade normalno.'
           : 'Cekamo da dnevni izazov stigne sa servera.'
   const sessionStatusCopy = hasContinuableSession
-    ? 'Imas sacuvanu sesiju koju mozes nastaviti bez gubitka progresa.'
+    ? hasSavedWordChainSession && !hasMatchingSavedWordChainSession
+      ? `Imas sacuvan lanac za ${savedWordChainDifficulty.toLowerCase()} / ${savedWordChainCategory.toLowerCase()}, ali novi izbor ${selectedDifficulty.toLowerCase()} / ${selectedCategory.toLowerCase()} pokrece novu rundu.`
+      : 'Imas sacuvanu sesiju koju mozes nastaviti bez gubitka progresa.'
     : `Sljedeca nova runda krece sa ${selectedDifficulty.toLowerCase()} tezinom i kategorijom ${selectedCategory.toLowerCase()}.`
 
   const visibleCategories = useMemo(
@@ -336,7 +346,7 @@ function HomePage() {
   }
 
   const handleWordChainStart = () => {
-    if (hasSavedWordChainSession) {
+    if (hasMatchingSavedWordChainSession) {
       navigate('/word-chain')
       return
     }
@@ -671,9 +681,11 @@ function HomePage() {
                 <div className="home-game-copy">
                   <strong>Lanac rijeci</strong>
                   <small>
-                    {hasSavedWordChainSession
+                    {hasMatchingSavedWordChainSession
                       ? 'Nastavi svoj postojeci lanac'
-                      : 'Napravi smislen niz veza'}
+                      : hasSavedWordChainSession
+                        ? `Pokreni novi lanac za ${selectedCategory.toLowerCase()} / ${selectedDifficulty.toLowerCase()}`
+                        : 'Napravi smislen niz veza'}
                   </small>
                 </div>
               </button>

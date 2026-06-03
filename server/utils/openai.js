@@ -87,6 +87,7 @@ const createStructuredOpenAiResponse = async ({ instructions, input, schemaName 
 export const evaluateConceptAnswerWithAi = async ({
   words = [],
   canonicalAnswer = '',
+  acceptedAnswers = [],
   submittedAnswer = '',
   category = '',
   difficulty = '',
@@ -105,6 +106,9 @@ export const evaluateConceptAnswerWithAi = async ({
               'Procijeni da li je uneseni odgovor prihvatljiv za zajednicki pojam.',
               `Rijeci: ${words.join(', ')}`,
               `Kanonski odgovor: ${canonicalAnswer || 'nije zadat'}`,
+              `Dodatno prihvaceni odgovori: ${
+                acceptedAnswers.length ? acceptedAnswers.join(', ') : 'nema'
+              }`,
               `Kategorija: ${category || 'nije zadato'}`,
               `Tezina: ${difficulty || 'nije zadato'}`,
               `Uneseni odgovor: ${submittedAnswer}`,
