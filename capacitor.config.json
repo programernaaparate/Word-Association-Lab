@@ -5,10 +5,7 @@
   "bundledWebRuntime": false,
   "server": {
     "hostname": "localhost",
-    "androidScheme": "http",
-    "allowNavigation": [
-      "192.168.1.109"
-    ]
+    "androidScheme": "http"
   },
   "android": {
     "allowMixedContent": true

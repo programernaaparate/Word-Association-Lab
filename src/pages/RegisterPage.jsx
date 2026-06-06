@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Capacitor } from '@capacitor/core'
 import { Link, useNavigate } from 'react-router-dom'
 import AppIcon from '../components/AppIcon'
 import AuthGameActions from '../components/AuthGameActions'
@@ -14,6 +15,7 @@ function RegisterPage() {
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const navigate = useNavigate()
+  const isNativePlatform = Capacitor.isNativePlatform()
 
   const handleChange = (field, value) => {
     setForm((prev) => ({
@@ -158,6 +160,15 @@ function RegisterPage() {
               disabled={isSubmitting}
               compact={false}
             />
+            {isNativePlatform ? (
+              <div className="native-auth-note">
+                <strong>Android napomena</strong>
+                <p>
+                  Za najmirniji rad aplikacije preporucen je lokalni nalog sa korisnickim imenom i
+                  lozinkom. Google prijava ostaje dostupna i u web verziji.
+                </p>
+              </div>
+            ) : null}
             <AuthGameActions />
           </div>
         </div>

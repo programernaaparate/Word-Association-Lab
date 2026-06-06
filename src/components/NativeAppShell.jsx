@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { App as CapacitorApp } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
+import { Keyboard } from '@capacitor/keyboard'
 import { SplashScreen } from '@capacitor/splash-screen'
 import { StatusBar, Style } from '@capacitor/status-bar'
 
@@ -20,9 +21,27 @@ function NativeAppShell() {
 
     StatusBar.setStyle({ style: Style.Light }).catch(() => {})
     StatusBar.setBackgroundColor({ color: '#5D9CF6' }).catch(() => {})
+    Keyboard.setResizeMode({ mode: 'body' }).catch(() => {})
     SplashScreen.hide().catch(() => {})
 
+    const keyboardShowPromise = Keyboard.addListener('keyboardDidShow', (event) => {
+      document.body.classList.add('keyboard-open')
+      document.documentElement.style.setProperty(
+        '--keyboard-height',
+        `${Math.max(0, Number(event?.keyboardHeight || 0))}px`
+      )
+    })
+
+    const keyboardHidePromise = Keyboard.addListener('keyboardDidHide', () => {
+      document.body.classList.remove('keyboard-open')
+      document.documentElement.style.setProperty('--keyboard-height', '0px')
+    })
+
     return () => {
+      keyboardShowPromise.then((listener) => listener.remove()).catch(() => {})
+      keyboardHidePromise.then((listener) => listener.remove()).catch(() => {})
+      document.documentElement.style.setProperty('--keyboard-height', '0px')
+      document.body.classList.remove('keyboard-open')
       document.body.classList.remove('native-app')
     }
   }, [])

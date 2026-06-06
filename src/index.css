@@ -5,6 +5,7 @@
 }
 
 :root {
+  --keyboard-height: 0px;
   --bg: #e8f0fb;
   --card: rgba(255, 255, 255, 0.94);
   --border: #e1e8f3;
@@ -282,6 +283,36 @@ body.native-app .topbar {
   flex-direction: column;
 }
 
+.mobile-bootstrap-card {
+  justify-content: center;
+}
+
+.mobile-bootstrap-body {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 36px 26px;
+  text-align: center;
+}
+
+.mobile-bootstrap-body h1 {
+  font-size: 26px;
+  margin-bottom: 10px;
+}
+
+.mobile-bootstrap-body p {
+  max-width: 280px;
+  margin: 0 auto 18px;
+  color: #556171;
+  line-height: 1.55;
+}
+
+.mobile-bootstrap-status {
+  width: min(300px, 100%);
+}
+
 .auth-hero {
   min-height: 330px;
   padding: 52px 28px 28px;
@@ -491,6 +522,26 @@ input,
 
 .auth-alt-link-login {
   margin-bottom: 8px;
+}
+
+.native-auth-note {
+  border: 1px solid #dfe8f4;
+  background: linear-gradient(180deg, #f8fbff, #ffffff);
+  border-radius: 18px;
+  padding: 14px 16px;
+  color: #556171;
+  box-shadow: 0 10px 22px rgba(22, 32, 48, 0.04);
+}
+
+.native-auth-note strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #2a3340;
+}
+
+.native-auth-note p {
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .divider {
@@ -1424,6 +1475,12 @@ input,
 body.native-app .bottom-nav {
   height: calc(78px + env(safe-area-inset-bottom, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+body.native-app.keyboard-open .bottom-nav {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(calc(100% + env(safe-area-inset-bottom, 0px)));
 }
 
 .bottom-item {
@@ -4516,6 +4573,10 @@ body.native-app .bottom-nav {
   gap: 12px;
 }
 
+body.native-app.keyboard-open .message-popup-root {
+  bottom: calc(12px + var(--keyboard-height));
+}
+
 .admin-toolbar {
   justify-content: space-between;
   align-items: center;
@@ -4768,6 +4829,10 @@ body.native-app .bottom-nav {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+body.native-app.keyboard-open .message-popup-window {
+  max-height: min(56vh, calc(100dvh - var(--keyboard-height) - 28px));
 }
 
 .admin-review-preview-box {

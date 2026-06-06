@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core'
+import { Preferences } from '@capacitor/preferences'
 import {
   DEFAULT_ASSOCIATION_WORDS as ASSOCIATION_CONTENT_MATRIX,
   DEFAULT_LOGIC_CHALLENGES as LOGIC_CONTENT_MATRIX,
@@ -184,6 +186,7 @@ const DEFAULT_CATEGORY = 'Priroda'
 const ALL_CATEGORY = 'Sve'
 const AUTH_TOKEN_KEY = 'authToken'
 const RECENT_CONTENT_ROTATIONS_KEY = 'recentContentRotations'
+const NATIVE_STORAGE_PREFIX = 'wal-mobile'
 const DIFFICULTY_ORDER = ['Lako', 'Srednje', 'Tesko']
 const HISTORY_LIMIT = 250
 const HISTORY_DATE_FORMATTER = new Intl.DateTimeFormat('en-CA', {
@@ -251,9 +254,104 @@ const ACHIEVEMENT_DEFINITIONS = [
   },
 ]
 
+const NATIVE_MIRRORED_KEYS = [
+  'users',
+  'currentUser',
+  AUTH_TOKEN_KEY,
+  'associationWords',
+  'logicChallenges',
+  'relationChallenges',
+  'activeSession',
+  'lastResult',
+  'gameSubmissions',
+  'gameHistory',
+  'dailyChallengeEntries',
+  'dailyChallengeOverride',
+  'difficulty',
+  'category',
+  RECENT_CONTENT_ROTATIONS_KEY,
+  'progressVersion',
+]
+
+const canUseBrowserStorage = () =>
+  typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
+
+const isNativeMobileStorageEnabled = () =>
+  Capacitor.isNativePlatform() && canUseBrowserStorage()
+
+const getNativeStorageKey = (key) => `${NATIVE_STORAGE_PREFIX}:${key}`
+
+const syncNativeStorageKey = (key, value) => {
+  if (!isNativeMobileStorageEnabled() || !NATIVE_MIRRORED_KEYS.includes(key)) {
+    return
+  }
+
+  Promise.resolve()
+    .then(() => {
+      if (value === null || value === undefined) {
+        return Preferences.remove({ key: getNativeStorageKey(key) })
+      }
+
+      return Preferences.set({
+        key: getNativeStorageKey(key),
+        value: String(value),
+      })
+    })
+    .catch(() => {})
+}
+
+const setRawStorageValue = (key, value) => {
+  if (!canUseBrowserStorage()) {
+    return
+  }
+
+  window.localStorage.setItem(key, value)
+  syncNativeStorageKey(key, value)
+}
+
+const removeStorageValue = (key) => {
+  if (!canUseBrowserStorage()) {
+    return
+  }
+
+  window.localStorage.removeItem(key)
+  syncNativeStorageKey(key, null)
+}
+
+export const hydrateNativeAppStorage = async () => {
+  if (!isNativeMobileStorageEnabled()) {
+    return
+  }
+
+  await Promise.all(
+    NATIVE_MIRRORED_KEYS.map(async (key) => {
+      const localValue = window.localStorage.getItem(key)
+      const { value: nativeValue } = await Preferences.get({
+        key: getNativeStorageKey(key),
+      })
+
+      if (localValue === null && nativeValue !== null) {
+        window.localStorage.setItem(key, nativeValue)
+        return
+      }
+
+      if (localValue !== null && localValue !== nativeValue) {
+        await Preferences.set({
+          key: getNativeStorageKey(key),
+          value: localValue,
+        })
+      }
+    })
+  )
+}
+
 const readStorage = (key, fallback) => {
   try {
-    const item = localStorage.getItem(key)
+    if (!canUseBrowserStorage()) {
+      return fallback
+    }
+
+    const item = window.localStorage.getItem(key)
     return item ? JSON.parse(item) : fallback
   } catch {
     return fallback
@@ -261,7 +359,7 @@ const readStorage = (key, fallback) => {
 }
 
 const writeStorage = (key, value) => {
-  localStorage.setItem(key, JSON.stringify(value))
+  setRawStorageValue(key, JSON.stringify(value))
 }
 
 const shuffleItems = (items = []) => {
@@ -488,7 +586,7 @@ export const saveDailyChallengeOverride = (override) => {
 }
 
 export const clearDailyChallengeOverride = () => {
-  localStorage.removeItem('dailyChallengeOverride')
+  removeStorageValue('dailyChallengeOverride')
 }
 
 const getAwardedPointsFromHistoryItem = (item = {}) => {
@@ -660,7 +758,7 @@ const buildAchievements = (metrics = {}) =>
   })
 
 const migrateProgressData = () => {
-  if (localStorage.getItem('progressVersion') === '2') {
+  if (canUseBrowserStorage() && window.localStorage.getItem('progressVersion') === '2') {
     return
   }
 
@@ -668,7 +766,7 @@ const migrateProgressData = () => {
   const history = readStorage('gameHistory', [])
 
   if (!users.length) {
-    localStorage.setItem('progressVersion', '2')
+    setRawStorageValue('progressVersion', '2')
     return
   }
 
@@ -702,7 +800,7 @@ const migrateProgressData = () => {
     writeStorage('currentUser', updatedCurrentUser)
   }
 
-  localStorage.setItem('progressVersion', '2')
+  setRawStorageValue('progressVersion', '2')
 }
 
 export const getUsers = () => {
@@ -720,7 +818,7 @@ export const saveCurrentUser = (user) => {
 
 export const saveAuthSession = ({ token, user }) => {
   if (token) {
-    localStorage.setItem(AUTH_TOKEN_KEY, token)
+    setRawStorageValue(AUTH_TOKEN_KEY, token)
   }
 
   if (user) {
@@ -734,12 +832,12 @@ export const getCurrentUser = () => {
 }
 
 export const getAuthToken = () => {
-  return localStorage.getItem(AUTH_TOKEN_KEY)
+  return canUseBrowserStorage() ? window.localStorage.getItem(AUTH_TOKEN_KEY) : null
 }
 
 export const logoutUser = () => {
-  localStorage.removeItem(AUTH_TOKEN_KEY)
-  localStorage.removeItem('currentUser')
+  removeStorageValue(AUTH_TOKEN_KEY)
+  removeStorageValue('currentUser')
 }
 
 export const getAssociationWords = () => {
@@ -928,7 +1026,7 @@ export const getActiveSession = () => {
 
   if (sessionUserId !== null && currentUserId !== null) {
     if (sessionUserId !== currentUserId) {
-      localStorage.removeItem('activeSession')
+      removeStorageValue('activeSession')
       return null
     }
 
@@ -937,35 +1035,39 @@ export const getActiveSession = () => {
 
   if (sessionUsername && currentUsername) {
     if (sessionUsername !== currentUsername) {
-      localStorage.removeItem('activeSession')
+      removeStorageValue('activeSession')
       return null
     }
 
     return session
   }
 
-  localStorage.removeItem('activeSession')
+  removeStorageValue('activeSession')
   return null
 }
 
 export const clearActiveSession = () => {
-  localStorage.removeItem('activeSession')
+  removeStorageValue('activeSession')
 }
 
 export const saveDifficulty = (difficulty) => {
-  localStorage.setItem('difficulty', difficulty)
+  setRawStorageValue('difficulty', difficulty)
 }
 
 export const getDifficulty = () => {
-  return localStorage.getItem('difficulty') || DEFAULT_DIFFICULTY
+  return canUseBrowserStorage()
+    ? window.localStorage.getItem('difficulty') || DEFAULT_DIFFICULTY
+    : DEFAULT_DIFFICULTY
 }
 
 export const saveCategory = (category) => {
-  localStorage.setItem('category', normalizeCategory(category))
+  setRawStorageValue('category', normalizeCategory(category))
 }
 
 export const getCategory = () => {
-  return localStorage.getItem('category') || DEFAULT_CATEGORY
+  return canUseBrowserStorage()
+    ? window.localStorage.getItem('category') || DEFAULT_CATEGORY
+    : DEFAULT_CATEGORY
 }
 
 const getRecentContentRotations = () => {
@@ -1316,7 +1418,7 @@ export const addGameHistory = (item) => {
 }
 
 export const clearGameHistory = () => {
-  localStorage.removeItem('gameHistory')
+  removeStorageValue('gameHistory')
 }
 
 export const getHistorySummary = () => {
@@ -1352,7 +1454,7 @@ export const clearAllAppData = () => {
     'category',
     RECENT_CONTENT_ROTATIONS_KEY,
     'progressVersion',
-  ].forEach((key) => localStorage.removeItem(key))
+  ].forEach((key) => removeStorageValue(key))
 }
 
 export const getExploreIndex = () => {
