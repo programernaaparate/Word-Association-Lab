@@ -100,6 +100,42 @@ const buildContentTarget = (type, item = {}) => {
   }
 }
 
+const buildSubmissionStatusMessage = ({
+  status,
+  submission = {},
+  contentTarget = null,
+  rewardGrantedNow = false,
+  rewardPoints = 0,
+} = {}) => {
+  const safeRewardPoints = Math.max(0, Number(rewardPoints || 0) || 0)
+  const cleanProposedAnswer = String(
+    submission.proposed_answer || submission.proposedAnswer || ''
+  ).trim()
+  const answerLabel = cleanProposedAnswer ? `Vas prijedlog "${cleanProposedAnswer}"` : 'Vas unos'
+  const targetTitle =
+    contentTarget?.title ||
+    contentTarget?.word ||
+    contentTarget?.answer ||
+    String(submission.game_type || submission.gameType || 'igre').trim() ||
+    'igre'
+
+  if ((submission.submission_kind || submission.submissionKind) === 'answer_review') {
+    if (status === 'approved') {
+      return rewardGrantedNow && safeRewardPoints > 0
+        ? `${answerLabel} za unos "${targetTitle}" je prihvacen. Dodato je +${safeRewardPoints} XP. Hvala!`
+        : `${answerLabel} za unos "${targetTitle}" je prihvacen. Hvala!`
+    }
+
+    return `${answerLabel} za unos "${targetTitle}" nije prihvacen. XP nije dodat. Slobodno posaljite novi prijedlog.`
+  }
+
+  if (status === 'approved') {
+    return `Admin je pregledao vas unos za igru "${targetTitle}" i oznacio ga kao prihvacen. Hvala na ucestvovanju!`
+  }
+
+  return `Admin je pregledao vas unos za igru "${targetTitle}" i oznacio ga kao neprihvacen. Slobodno pokusajte ponovo ili posaljite novi prijedlog.`
+}
+
 const mapSubmission = (item) => ({
   id: item.id,
   userId: item.user_id ? Number(item.user_id) : null,
@@ -701,7 +737,7 @@ router.patch('/submissions/:id/status', async (req, res) => {
   }
 
   const [existingSubmission] = await query(
-    `SELECT id, user_id, user_label, submission_kind, content_type, content_item_id, proposed_answer, points, reward_granted
+    `SELECT id, user_id, user_label, game_type, status, submission_kind, content_type, content_item_id, proposed_answer, points, reward_granted
      FROM game_submissions
      WHERE id = ?
      LIMIT 1`,
@@ -826,6 +862,10 @@ router.patch('/submissions/:id/status', async (req, res) => {
     const playerNotified = nextStatus === 'approved' || nextStatus === 'rejected' ? 0 : 1
     const rewardGrantedValue =
       shouldGrantReward || Number(existingSubmission.reward_granted || 0) ? 1 : 0
+    const shouldSendChatUpdate =
+      Boolean(resolvedUserId) &&
+      (nextStatus === 'approved' || nextStatus === 'rejected') &&
+      existingSubmission.status !== nextStatus
 
     await connection.execute(
       `UPDATE game_submissions
@@ -846,6 +886,22 @@ router.patch('/submissions/:id/status', async (req, res) => {
         submissionId,
       ]
     )
+
+    if (shouldSendChatUpdate) {
+      const reviewMessage = buildSubmissionStatusMessage({
+        status: nextStatus,
+        submission: existingSubmission,
+        contentTarget,
+        rewardGrantedNow: shouldGrantReward,
+        rewardPoints,
+      })
+
+      await connection.execute(
+        `INSERT INTO support_messages (sender_id, recipient_id, message, is_read)
+         VALUES (?, ?, ?, 0)`,
+        [req.user.id, resolvedUserId, reviewMessage]
+      )
+    }
 
     await connection.commit()
   } catch (error) {

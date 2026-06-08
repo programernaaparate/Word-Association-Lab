@@ -41,16 +41,48 @@ const getBrowserHostApiUrl = () => {
 
 const getUniqueApiBaseUrls = (urls = []) => [...new Set(urls.filter(Boolean))]
 
+const isLocalHostname = (hostname = '') => {
+  const normalizedHost = String(hostname || '').trim().toLowerCase()
+
+  return (
+    normalizedHost === 'localhost' ||
+    normalizedHost === '127.0.0.1' ||
+    /^192\.168\.\d{1,3}\.\d{1,3}$/.test(normalizedHost) ||
+    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(normalizedHost) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(normalizedHost)
+  )
+}
+
+const isRemoteConfiguredApiUrl = (url = '') => {
+  try {
+    const parsedUrl = new URL(String(url || '').trim())
+    return !isLocalHostname(parsedUrl.hostname)
+  } catch {
+    return false
+  }
+}
+
 const getCandidateApiBaseUrls = () => {
   const configuredApiUrl = normalizeApiBaseUrl(import.meta.env.VITE_API_URL)
   const storedApiUrl = getStoredApiBaseUrl()
   const browserHostApiUrl = normalizeApiBaseUrl(getBrowserHostApiUrl())
+  const shouldPreferConfiguredApi = isRemoteConfiguredApiUrl(configuredApiUrl)
 
   if (isNativeAndroid()) {
     return getUniqueApiBaseUrls([
       configuredApiUrl,
       storedApiUrl,
       'http://10.0.2.2:4000/api',
+      browserHostApiUrl,
+      'http://localhost:4000/api',
+      'http://127.0.0.1:4000/api',
+    ])
+  }
+
+  if (shouldPreferConfiguredApi) {
+    return getUniqueApiBaseUrls([
+      configuredApiUrl,
+      storedApiUrl,
       browserHostApiUrl,
       'http://localhost:4000/api',
       'http://127.0.0.1:4000/api',
