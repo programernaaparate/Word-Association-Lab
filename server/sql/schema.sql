@@ -82,18 +82,23 @@ CREATE TABLE IF NOT EXISTS game_history (
 
 CREATE TABLE IF NOT EXISTS game_submissions (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NULL,
   user_label VARCHAR(80) NOT NULL,
   game_type VARCHAR(80) NOT NULL,
   content TEXT NOT NULL,
   points INT NOT NULL DEFAULT 0,
   time_seconds INT NOT NULL DEFAULT 0,
-  status ENUM('pending', 'approved', 'flagged') NOT NULL DEFAULT 'pending',
+  status ENUM('pending', 'approved', 'flagged', 'rejected') NOT NULL DEFAULT 'pending',
   is_daily TINYINT(1) NOT NULL DEFAULT 0,
   submission_kind VARCHAR(30) NOT NULL DEFAULT 'game',
   content_type VARCHAR(30) NULL,
   content_item_id INT NULL,
   proposed_answer VARCHAR(255) NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  reviewed_at TIMESTAMP NULL DEFAULT NULL,
+  reward_granted TINYINT(1) NOT NULL DEFAULT 0,
+  player_notified TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_game_submission_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS daily_challenge_overrides (

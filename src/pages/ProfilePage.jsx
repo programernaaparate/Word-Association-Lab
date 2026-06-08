@@ -12,6 +12,7 @@ import {
   getMyHistoryRequest,
 } from '../utils/api'
 import {
+  STORAGE_CHANGE_EVENT,
   calculateLevelFromPoints,
   clearActiveSession,
   clearAllAppData,
@@ -37,6 +38,17 @@ function ProfilePage() {
   const [error, setError] = useState('')
   const [soundEnabled, setSoundEnabled] = useState(() => getSoundEnabled())
   const hasContinuableSession = Boolean(activeSession?.type) && !isExpiredDailySession(activeSession)
+
+  useEffect(() => {
+    const syncStoredUser = () => {
+      setUser(getCurrentUser())
+    }
+
+    window.addEventListener(STORAGE_CHANGE_EVENT, syncStoredUser)
+    return () => {
+      window.removeEventListener(STORAGE_CHANGE_EVENT, syncStoredUser)
+    }
+  }, [])
 
   useEffect(() => {
     let isMounted = true

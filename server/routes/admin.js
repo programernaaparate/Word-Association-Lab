@@ -16,6 +16,8 @@ router.use(requireAuth, requireAdmin)
 
 const RELATION_OPTIONS = new Set(['Sinonim', 'Antonim', 'Asocijacija'])
 const LOGIC_MODES = new Set(['concept', 'odd-one-out'])
+const REVIEW_REWARD_POINTS = 20
+const calculateLevelFromPoints = (points = 0) => Math.floor(Math.max(0, Number(points) || 0) / 1000) + 1
 
 const validatePassword = (password = '') => {
   if (password.length < 4) {
@@ -100,6 +102,7 @@ const buildContentTarget = (type, item = {}) => {
 
 const mapSubmission = (item) => ({
   id: item.id,
+  userId: item.user_id ? Number(item.user_id) : null,
   user: item.user_label,
   type: item.game_type,
   content: item.content,
@@ -115,6 +118,8 @@ const mapSubmission = (item) => ({
   contentType: item.content_type || null,
   contentItemId: item.content_item_id ? Number(item.content_item_id) : null,
   proposedAnswer: item.proposed_answer || null,
+  rewardGranted: Boolean(item.reward_granted),
+  reviewedAt: item.reviewed_at || null,
   createdAt: item.created_at,
 })
 
@@ -262,7 +267,8 @@ router.get('/dashboard', async (_req, res) => {
   const [submissionStats] = await query(
     `SELECT
       SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pendingCount,
-      SUM(CASE WHEN status = 'flagged' THEN 1 ELSE 0 END) AS flaggedCount
+      SUM(CASE WHEN status = 'flagged' THEN 1 ELSE 0 END) AS flaggedCount,
+      SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejectedCount
      FROM game_submissions`
   )
 
@@ -274,6 +280,7 @@ router.get('/dashboard', async (_req, res) => {
       Number(relationStats.total || 0),
     pendingSubmissions: Number(submissionStats.pendingCount || 0),
     flaggedSubmissions: Number(submissionStats.flaggedCount || 0),
+    rejectedSubmissions: Number(submissionStats.rejectedCount || 0),
   })
 })
 
@@ -667,7 +674,7 @@ router.get('/submissions', async (req, res) => {
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
 
   const rows = await query(
-    `SELECT id, user_label, game_type, content, points, time_seconds, status, is_daily, submission_kind, content_type, content_item_id, proposed_answer, created_at
+    `SELECT id, user_id, user_label, game_type, content, points, time_seconds, status, is_daily, submission_kind, content_type, content_item_id, proposed_answer, reviewed_at, reward_granted, created_at
      FROM game_submissions
      ${whereClause}
      ORDER BY created_at DESC
@@ -683,7 +690,9 @@ router.get('/submissions', async (req, res) => {
 router.patch('/submissions/:id/status', async (req, res) => {
   const submissionId = Number(req.params.id || 0)
   const nextStatus =
-    req.body?.status === 'approved' || req.body?.status === 'flagged'
+    req.body?.status === 'approved' ||
+    req.body?.status === 'flagged' ||
+    req.body?.status === 'rejected'
       ? req.body.status
       : 'pending'
 
@@ -692,7 +701,7 @@ router.patch('/submissions/:id/status', async (req, res) => {
   }
 
   const [existingSubmission] = await query(
-    `SELECT id, submission_kind, content_type, content_item_id, proposed_answer
+    `SELECT id, user_id, user_label, submission_kind, content_type, content_item_id, proposed_answer, points, reward_granted
      FROM game_submissions
      WHERE id = ?
      LIMIT 1`,
@@ -703,51 +712,151 @@ router.patch('/submissions/:id/status', async (req, res) => {
     return res.status(404).json({ message: 'Submission nije pronadjen.' })
   }
 
-  if (
-    nextStatus === 'approved' &&
-    existingSubmission.submission_kind === 'answer_review' &&
-    existingSubmission.content_type === 'association' &&
-    Number(existingSubmission.content_item_id || 0) > 0 &&
-    String(existingSubmission.proposed_answer || '').trim()
-  ) {
-    const [associationItem] = await query(
-      'SELECT accepted_answers_json FROM association_words WHERE id = ? LIMIT 1',
-      [existingSubmission.content_item_id]
-    )
+  const pool = getPool()
+  const connection = await pool.getConnection()
 
-    if (associationItem) {
-      let acceptedAnswers = []
+  try {
+    await connection.beginTransaction()
 
-      try {
-        acceptedAnswers = Array.isArray(associationItem.accepted_answers_json)
-          ? associationItem.accepted_answers_json
-          : JSON.parse(String(associationItem.accepted_answers_json || '[]'))
-      } catch {
-        acceptedAnswers = []
-      }
-
-      const nextAnswer = String(existingSubmission.proposed_answer || '').trim()
-      const alreadyExists = acceptedAnswers.some(
-        (item) => String(item || '').trim().toLowerCase() === nextAnswer.toLowerCase()
+    let resolvedUserId = Number(existingSubmission.user_id || 0) || null
+    if (!resolvedUserId && existingSubmission.user_label) {
+      const [matchedUsers] = await connection.execute(
+        'SELECT id FROM users WHERE LOWER(username) = LOWER(?) LIMIT 1',
+        [existingSubmission.user_label]
       )
+      resolvedUserId = matchedUsers[0]?.id ? Number(matchedUsers[0].id) : null
+    }
 
-      if (!alreadyExists) {
-        const nextAcceptedAnswers = buildExpandedAcceptedAnswers(nextAnswer, [
-          ...acceptedAnswers,
-          nextAnswer,
-        ])
-        await query(
-          'UPDATE association_words SET accepted_answers_json = ? WHERE id = ?',
-          [JSON.stringify(nextAcceptedAnswers), existingSubmission.content_item_id]
+    let contentTarget = null
+    if (existingSubmission.content_type && Number(existingSubmission.content_item_id || 0) > 0) {
+      contentTarget = await getContentItemByTypeAndId(
+        existingSubmission.content_type,
+        Number(existingSubmission.content_item_id)
+      )
+    }
+
+    if (
+      nextStatus === 'approved' &&
+      existingSubmission.submission_kind === 'answer_review' &&
+      existingSubmission.content_type === 'association' &&
+      Number(existingSubmission.content_item_id || 0) > 0 &&
+      String(existingSubmission.proposed_answer || '').trim()
+    ) {
+      const [associationRows] = await connection.execute(
+        'SELECT accepted_answers_json FROM association_words WHERE id = ? LIMIT 1',
+        [existingSubmission.content_item_id]
+      )
+      const associationItem = associationRows[0]
+
+      if (associationItem) {
+        let acceptedAnswers = []
+
+        try {
+          acceptedAnswers = Array.isArray(associationItem.accepted_answers_json)
+            ? associationItem.accepted_answers_json
+            : JSON.parse(String(associationItem.accepted_answers_json || '[]'))
+        } catch {
+          acceptedAnswers = []
+        }
+
+        const nextAnswer = String(existingSubmission.proposed_answer || '').trim()
+        const alreadyExists = acceptedAnswers.some(
+          (item) => String(item || '').trim().toLowerCase() === nextAnswer.toLowerCase()
         )
+
+        if (!alreadyExists) {
+          const nextAcceptedAnswers = buildExpandedAcceptedAnswers(nextAnswer, [
+            ...acceptedAnswers,
+            nextAnswer,
+          ])
+          await connection.execute(
+            'UPDATE association_words SET accepted_answers_json = ? WHERE id = ?',
+            [JSON.stringify(nextAcceptedAnswers), existingSubmission.content_item_id]
+          )
+        }
       }
     }
+
+    const rewardPoints =
+      existingSubmission.submission_kind === 'answer_review'
+        ? Math.max(REVIEW_REWARD_POINTS, Number(existingSubmission.points || 0) || 0)
+        : Math.max(0, Number(existingSubmission.points || 0) || 0)
+    const shouldGrantReward =
+      nextStatus === 'approved' &&
+      existingSubmission.submission_kind === 'answer_review' &&
+      resolvedUserId &&
+      !Number(existingSubmission.reward_granted || 0)
+
+    if (shouldGrantReward) {
+      await connection.execute(
+        `INSERT INTO game_history
+          (user_id, game_type, score, base_score, earned_points, awarded_points, performance_bonus,
+           combo_bonus, max_combo, total, correct, accuracy, time_seconds, category, difficulty,
+           hint_count, wrong_attempts, partial_count, is_daily, daily_reward)
+         VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 1, 1, 100, 0, ?, ?, 0, 0, 0, 0, 0)`,
+        [
+          resolvedUserId,
+          'Provjera odgovora',
+          rewardPoints,
+          rewardPoints,
+          rewardPoints,
+          rewardPoints,
+          contentTarget?.category || null,
+          contentTarget?.difficulty || null,
+        ]
+      )
+
+      await connection.execute('UPDATE users SET points = points + ? WHERE id = ?', [
+        rewardPoints,
+        resolvedUserId,
+      ])
+
+      const [updatedUsers] = await connection.execute(
+        'SELECT points FROM users WHERE id = ? LIMIT 1',
+        [resolvedUserId]
+      )
+      const updatedPoints = Number(updatedUsers[0]?.points || 0)
+      await connection.execute('UPDATE users SET level = ? WHERE id = ?', [
+        calculateLevelFromPoints(updatedPoints),
+        resolvedUserId,
+      ])
+    }
+
+    const reviewedAt = nextStatus === 'approved' || nextStatus === 'rejected' ? new Date() : null
+    const playerNotified = nextStatus === 'approved' || nextStatus === 'rejected' ? 0 : 1
+    const rewardGrantedValue =
+      shouldGrantReward || Number(existingSubmission.reward_granted || 0) ? 1 : 0
+
+    await connection.execute(
+      `UPDATE game_submissions
+       SET user_id = ?,
+           status = ?,
+           points = ?,
+           reviewed_at = ?,
+           reward_granted = ?,
+           player_notified = ?
+       WHERE id = ?`,
+      [
+        resolvedUserId,
+        nextStatus,
+        rewardPoints,
+        reviewedAt,
+        rewardGrantedValue,
+        playerNotified,
+        submissionId,
+      ]
+    )
+
+    await connection.commit()
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
   }
 
-  await query('UPDATE game_submissions SET status = ? WHERE id = ?', [nextStatus, submissionId])
-
   const rows = await query(
-    `SELECT id, user_label, game_type, content, points, time_seconds, status, is_daily, submission_kind, content_type, content_item_id, proposed_answer, created_at
+    `SELECT id, user_id, user_label, game_type, content, points, time_seconds, status, is_daily, submission_kind, content_type, content_item_id, proposed_answer, reviewed_at, reward_granted, created_at
      FROM game_submissions
      WHERE id = ?
      LIMIT 1`,

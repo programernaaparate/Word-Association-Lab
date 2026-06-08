@@ -17,7 +17,8 @@
     "seed:mega": "node server/sql/generate_mega_seed.mjs",
     "mobile:sync": "npm run build && npx cap sync android",
     "mobile:android": "npm run build && npx cap sync android && npx cap open android",
-    "mobile:apk": "powershell -ExecutionPolicy Bypass -File .\\scripts\\build-android-apk.ps1"
+    "mobile:apk": "powershell -ExecutionPolicy Bypass -File .\\scripts\\build-android-apk.ps1",
+    "mobile:release": "powershell -ExecutionPolicy Bypass -File .\\scripts\\build-android-release.ps1"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",

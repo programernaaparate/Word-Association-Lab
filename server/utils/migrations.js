@@ -41,6 +41,12 @@ export const runMigrations = async () => {
   const [submissionKindColumns] = await pool.query(
     "SHOW COLUMNS FROM game_submissions LIKE 'submission_kind'"
   )
+  const [submissionStatusColumns] = await pool.query(
+    "SHOW COLUMNS FROM game_submissions LIKE 'status'"
+  )
+  const [submissionUserIdColumns] = await pool.query(
+    "SHOW COLUMNS FROM game_submissions LIKE 'user_id'"
+  )
   const [logicAcceptedAnswersColumns] = await pool.query(
     "SHOW COLUMNS FROM logic_challenges LIKE 'accepted_answers_json'"
   )
@@ -52,6 +58,15 @@ export const runMigrations = async () => {
   )
   const [submissionProposedAnswerColumns] = await pool.query(
     "SHOW COLUMNS FROM game_submissions LIKE 'proposed_answer'"
+  )
+  const [submissionReviewedAtColumns] = await pool.query(
+    "SHOW COLUMNS FROM game_submissions LIKE 'reviewed_at'"
+  )
+  const [submissionRewardGrantedColumns] = await pool.query(
+    "SHOW COLUMNS FROM game_submissions LIKE 'reward_granted'"
+  )
+  const [submissionPlayerNotifiedColumns] = await pool.query(
+    "SHOW COLUMNS FROM game_submissions LIKE 'player_notified'"
   )
   const [historyPerformanceBonusColumns] = await pool.query(
     "SHOW COLUMNS FROM game_history LIKE 'performance_bonus'"
@@ -117,6 +132,19 @@ export const runMigrations = async () => {
     )
   }
 
+  if (!submissionUserIdColumns.length) {
+    await pool.query(
+      'ALTER TABLE game_submissions ADD COLUMN user_id INT NULL FIRST'
+    )
+  }
+
+  const submissionStatusType = String(submissionStatusColumns?.[0]?.Type || '').toLowerCase()
+  if (submissionStatusType && !submissionStatusType.includes("'rejected'")) {
+    await pool.query(
+      "ALTER TABLE game_submissions MODIFY COLUMN status ENUM('pending', 'approved', 'flagged', 'rejected') NOT NULL DEFAULT 'pending'"
+    )
+  }
+
   if (!logicAcceptedAnswersColumns.length) {
     await pool.query(
       'ALTER TABLE logic_challenges ADD COLUMN accepted_answers_json JSON NULL AFTER difficulty'
@@ -138,6 +166,24 @@ export const runMigrations = async () => {
   if (!submissionProposedAnswerColumns.length) {
     await pool.query(
       'ALTER TABLE game_submissions ADD COLUMN proposed_answer VARCHAR(255) NULL AFTER content_item_id'
+    )
+  }
+
+  if (!submissionReviewedAtColumns.length) {
+    await pool.query(
+      'ALTER TABLE game_submissions ADD COLUMN reviewed_at TIMESTAMP NULL DEFAULT NULL AFTER proposed_answer'
+    )
+  }
+
+  if (!submissionRewardGrantedColumns.length) {
+    await pool.query(
+      'ALTER TABLE game_submissions ADD COLUMN reward_granted TINYINT(1) NOT NULL DEFAULT 0 AFTER reviewed_at'
+    )
+  }
+
+  if (!submissionPlayerNotifiedColumns.length) {
+    await pool.query(
+      'ALTER TABLE game_submissions ADD COLUMN player_notified TINYINT(1) NOT NULL DEFAULT 1 AFTER reward_granted'
     )
   }
 
@@ -170,6 +216,13 @@ export const runMigrations = async () => {
       'ALTER TABLE game_history ADD COLUMN partial_count INT NOT NULL DEFAULT 0 AFTER wrong_attempts'
     )
   }
+
+  await pool.query(
+    `UPDATE game_submissions submissions
+     LEFT JOIN users ON LOWER(users.username) = LOWER(submissions.user_label)
+     SET submissions.user_id = users.id
+     WHERE submissions.user_id IS NULL`
+  )
 
   for (const [word, symbol] of associationSymbolBackfill) {
     await pool.query(

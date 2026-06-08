@@ -1,0 +1,4 @@
+storeFile=keystore/word-association-lab-release.jks
+storePassword=replace-with-store-password
+keyAlias=word_association_lab_release
+keyPassword=replace-with-key-password

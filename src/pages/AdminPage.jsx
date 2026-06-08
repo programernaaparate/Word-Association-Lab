@@ -17,7 +17,7 @@ import {
 } from '../utils/api'
 import { getAuthToken } from '../utils/storage'
 
-const AUTO_REFRESH_MS = 12000
+const AUTO_REFRESH_MS = 4000
 const categories = [
   'Priroda',
   'Nauka',
@@ -33,6 +33,7 @@ const moderationTabs = [
   { id: 'attention', label: 'Za odluku' },
   { id: 'answer_review', label: 'Odgovori' },
   { id: 'flagged', label: 'Oznaceni' },
+  { id: 'rejected', label: 'Odbijeni' },
   { id: 'audit', label: 'Arhiva partija' },
   { id: 'all', label: 'Sve' },
 ]
@@ -57,6 +58,7 @@ const getSubmissionKindLabel = (submissionKind) => {
 
 const getStatusLabel = (status) => {
   if (status === 'approved') return 'Odobreno'
+  if (status === 'rejected') return 'Odbijeno'
   if (status === 'flagged') return 'Pregled'
   return 'Novo'
 }
@@ -67,12 +69,14 @@ const getSubmissionCreatedAt = (item = {}) => {
 }
 
 const getSubmissionPriorityTone = (item = {}) => {
+  if (item?.status === 'rejected') return 'rejected'
   if (item?.submissionKind === 'answer_review') return 'answer'
   if (item?.status === 'flagged') return 'flagged'
   return 'pending'
 }
 
 const getSubmissionPriorityRank = (item = {}) => {
+  if (item?.status === 'rejected') return 0
   if (item?.submissionKind === 'answer_review') return 3
   if (item?.status === 'flagged') return 2
   if (item?.contentTarget || item?.requestedAction) return 1
@@ -80,6 +84,7 @@ const getSubmissionPriorityRank = (item = {}) => {
 }
 
 const getSubmissionPriorityLabel = (item = {}) => {
+  if (item?.status === 'rejected') return 'Odbijeno'
   if (item?.submissionKind === 'answer_review') return 'Trazi novi odgovor'
   if (item?.status === 'flagged') return 'Oznaceno za pregled'
   if (item?.contentTarget || item?.requestedAction) return 'Trazi pregled unosa'
@@ -290,6 +295,7 @@ function AdminPage() {
     activeGames: 0,
     pendingSubmissions: 0,
     flaggedSubmissions: 0,
+    rejectedSubmissions: 0,
   })
   const [isLiveMode, setIsLiveMode] = useState(true)
   const [isLoading, setIsLoading] = useState(Boolean(token))
@@ -383,8 +389,19 @@ function AdminPage() {
     const normalizedQuery = moderationSearch.trim().toLowerCase()
 
     return (submissions || [])
-      .filter((item) => item.status !== 'approved')
       .filter((item) => {
+        if (moderationFilter === 'rejected') {
+          return item.status === 'rejected'
+        }
+
+        if (moderationFilter === 'all') {
+          return item.status !== 'approved'
+        }
+
+        if (item.status === 'approved' || item.status === 'rejected') {
+          return false
+        }
+
         if (moderationFilter === 'attention') {
           return isAttentionSubmission(item)
         }
@@ -405,7 +422,7 @@ function AdminPage() {
           return !isAttentionSubmission(item)
         }
 
-        return true
+        return item.status !== 'approved'
       })
       .filter((item) => {
         if (!normalizedQuery) {
@@ -558,7 +575,10 @@ function AdminPage() {
   const pendingAnswerReviewCount = useMemo(
     () =>
       (submissions || []).filter(
-        (item) => item.status !== 'approved' && item.submissionKind === 'answer_review'
+        (item) =>
+          item.status !== 'approved' &&
+          item.status !== 'rejected' &&
+          item.submissionKind === 'answer_review'
       ).length,
     [submissions]
   )
@@ -566,7 +586,10 @@ function AdminPage() {
   const attentionSubmissionCount = useMemo(
     () =>
       (submissions || []).filter(
-        (item) => item.status !== 'approved' && isAttentionSubmission(item)
+        (item) =>
+          item.status !== 'approved' &&
+          item.status !== 'rejected' &&
+          isAttentionSubmission(item)
       ).length,
     [submissions]
   )
@@ -574,8 +597,16 @@ function AdminPage() {
   const archivedSubmissionCount = useMemo(
     () =>
       (submissions || []).filter(
-        (item) => item.status !== 'approved' && !isAttentionSubmission(item)
+        (item) =>
+          item.status !== 'approved' &&
+          item.status !== 'rejected' &&
+          !isAttentionSubmission(item)
       ).length,
+    [submissions]
+  )
+
+  const rejectedSubmissionCount = useMemo(
+    () => (submissions || []).filter((item) => item.status === 'rejected').length,
     [submissions]
   )
 
@@ -583,11 +614,18 @@ function AdminPage() {
     () => ({
       pending: (submissions || []).filter((item) => item.status === 'pending').length,
       flagged: (submissions || []).filter((item) => item.status === 'flagged').length,
+      rejected: rejectedSubmissionCount,
       answerReview: pendingAnswerReviewCount,
       attention: attentionSubmissionCount,
       archived: archivedSubmissionCount,
     }),
-    [archivedSubmissionCount, attentionSubmissionCount, pendingAnswerReviewCount, submissions]
+    [
+      archivedSubmissionCount,
+      attentionSubmissionCount,
+      pendingAnswerReviewCount,
+      rejectedSubmissionCount,
+      submissions,
+    ]
   )
 
   const currentCreateForm = createForms[createType]
@@ -1216,6 +1254,12 @@ function AdminPage() {
                   <span>potreban dodatni pregled</span>
                 </div>
 
+                <div className="admin-stat-card-v2 danger">
+                  <small>ODBIJENI</small>
+                  <strong>{moderationCounts.rejected}</strong>
+                  <span>pregledani prijedlozi koji ne ulaze u bazu</span>
+                </div>
+
                 <div className="admin-stat-card-v2 cool">
                   <small>ARHIVA PARTIJA</small>
                   <strong>{moderationCounts.archived}</strong>
@@ -1380,7 +1424,9 @@ function AdminPage() {
                       <div className="empty-admin-state">
                         {moderationFilter === 'attention'
                           ? `Sve je u redu. Trenutno nema zahtjeva koji traze odluku admina. U arhivi je sacuvano ${moderationCounts.archived} obicnih partija.`
-                          : 'Nema otvorenih prijava za izabrani filter.'}
+                          : moderationFilter === 'rejected'
+                            ? 'Nema odbijenih prijava za izabrani prikaz.'
+                            : 'Nema otvorenih prijava za izabrani filter.'}
                       </div>
                     )}
                   </div>
@@ -1410,6 +1456,23 @@ function AdminPage() {
                                   ? 'Odobri odgovor'
                                   : 'Odobri prijedlog'
                                 : 'Odobri unos'}
+                            </button>
+
+                            <button
+                              className="reject-btn"
+                              type="button"
+                              onClick={() =>
+                                handleSubmissionStatus(
+                                  selectedSubmission.id,
+                                  selectedSubmission.status === 'rejected' ? 'pending' : 'rejected'
+                                )
+                              }
+                            >
+                              {selectedSubmission.status === 'rejected'
+                                ? 'Vrati iz odbijenih'
+                                : selectedSubmission.submissionKind === 'answer_review'
+                                  ? 'Odbij odgovor'
+                                  : 'Odbij unos'}
                             </button>
 
                             <button

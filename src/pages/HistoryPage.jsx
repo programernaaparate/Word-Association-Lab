@@ -8,6 +8,7 @@ import {
   persistMergedHistory,
 } from '../utils/historySync'
 import {
+  STORAGE_CHANGE_EVENT,
   calculateLevelFromPoints,
   getAuthToken,
   getCurrentUser,
@@ -24,6 +25,17 @@ function HistoryPage() {
   )
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(Boolean(token))
+
+  useEffect(() => {
+    const syncStoredUser = () => {
+      setCurrentUser(getCurrentUser())
+    }
+
+    window.addEventListener(STORAGE_CHANGE_EVENT, syncStoredUser)
+    return () => {
+      window.removeEventListener(STORAGE_CHANGE_EVENT, syncStoredUser)
+    }
+  }, [])
 
   useEffect(() => {
     let isMounted = true

@@ -195,6 +195,13 @@ export const createSubmissionRequest = (token, payload) =>
     body: JSON.stringify(payload),
   })
 
+export const getReviewSubmissionUpdatesRequest = (token) =>
+  apiRequest('/submissions/review-updates', {
+    headers: {
+      ...withAuth(token),
+    },
+  })
+
 const buildQueryString = (params) => {
   const searchParams = new URLSearchParams()
 

@@ -5,6 +5,7 @@ import BottomNav from '../components/BottomNav'
 import { getCurrentUserRequest, getDailyChallengeRequest } from '../utils/api'
 import { getLevelTheme } from '../utils/levelTheme'
 import {
+  STORAGE_CHANGE_EVENT,
   calculateLevelFromPoints,
   clearActiveSession,
   getActiveSession,
@@ -134,6 +135,17 @@ function HomePage() {
   )
   const shouldShowCategoryToggle =
     !shouldAutoExpandCategories && ALL_CATEGORIES.length > 7
+
+  useEffect(() => {
+    const syncStoredUser = () => {
+      setUser(getCurrentUser())
+    }
+
+    window.addEventListener(STORAGE_CHANGE_EVENT, syncStoredUser)
+    return () => {
+      window.removeEventListener(STORAGE_CHANGE_EVENT, syncStoredUser)
+    }
+  }, [])
 
   useEffect(() => {
     const handleResize = () => {

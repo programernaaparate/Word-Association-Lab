@@ -187,6 +187,7 @@ const ALL_CATEGORY = 'Sve'
 const AUTH_TOKEN_KEY = 'authToken'
 const RECENT_CONTENT_ROTATIONS_KEY = 'recentContentRotations'
 const NATIVE_STORAGE_PREFIX = 'wal-mobile'
+export const STORAGE_CHANGE_EVENT = 'wal-storage-change'
 const DIFFICULTY_ORDER = ['Lako', 'Srednje', 'Tesko']
 const HISTORY_LIMIT = 250
 const HISTORY_DATE_FORMATTER = new Intl.DateTimeFormat('en-CA', {
@@ -276,6 +277,18 @@ const NATIVE_MIRRORED_KEYS = [
 const canUseBrowserStorage = () =>
   typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
 
+const emitStorageChange = (key) => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.dispatchEvent(
+    new CustomEvent(STORAGE_CHANGE_EVENT, {
+      detail: { key },
+    })
+  )
+}
+
 const isNativeMobileStorageEnabled = () =>
   Capacitor.isNativePlatform() && canUseBrowserStorage()
 
@@ -307,6 +320,7 @@ const setRawStorageValue = (key, value) => {
 
   window.localStorage.setItem(key, value)
   syncNativeStorageKey(key, value)
+  emitStorageChange(key)
 }
 
 const removeStorageValue = (key) => {
@@ -316,6 +330,7 @@ const removeStorageValue = (key) => {
 
   window.localStorage.removeItem(key)
   syncNativeStorageKey(key, null)
+  emitStorageChange(key)
 }
 
 export const hydrateNativeAppStorage = async () => {
@@ -816,6 +831,27 @@ export const saveCurrentUser = (user) => {
   writeStorage('currentUser', user)
 }
 
+export const syncStoredCurrentUser = (user) => {
+  if (!user?.id) {
+    return
+  }
+
+  const nextUser = {
+    ...user,
+    points: Math.max(0, Number(user.points || 0) || 0),
+    level: Math.max(1, Number(user.level || 1) || 1),
+  }
+
+  const nextUsers = getUsers()
+  const alreadyExists = nextUsers.some((item) => item.id === nextUser.id)
+  saveUsers(
+    alreadyExists
+      ? nextUsers.map((item) => (item.id === nextUser.id ? { ...item, ...nextUser } : item))
+      : [nextUser, ...nextUsers]
+  )
+  saveCurrentUser(nextUser)
+}
+
 export const saveAuthSession = ({ token, user }) => {
   if (token) {
     setRawStorageValue(AUTH_TOKEN_KEY, token)
@@ -974,6 +1010,67 @@ export const addGameSubmission = (submission) => {
     },
     ...submissions,
   ])
+}
+
+export const updateGameSubmission = (submissionId, updates = {}) => {
+  if (!submissionId) {
+    return
+  }
+
+  const submissions = getGameSubmissions()
+  let changed = false
+  const nextSubmissions = submissions.map((item) => {
+    if (Number(item.id) !== Number(submissionId)) {
+      return item
+    }
+
+    changed = true
+    return {
+      ...item,
+      ...updates,
+    }
+  })
+
+  if (changed) {
+    saveGameSubmissions(nextSubmissions)
+  }
+}
+
+export const applyReviewSubmissionDecisionLocally = (reviewUpdate = {}) => {
+  if (!reviewUpdate?.id) {
+    return
+  }
+
+  updateGameSubmission(reviewUpdate.id, {
+    status: reviewUpdate.status,
+    reviewedAt: reviewUpdate.reviewedAt || new Date().toISOString(),
+    rewardGranted: Boolean(reviewUpdate.rewardGranted),
+    points: Math.max(0, Number(reviewUpdate.rewardPoints || 0) || 0),
+  })
+
+  if (
+    reviewUpdate.status === 'approved' &&
+    reviewUpdate.contentType === 'association' &&
+    Number(reviewUpdate.contentItemId || 0) > 0 &&
+    String(reviewUpdate.proposedAnswer || '').trim()
+  ) {
+    const nextAnswer = String(reviewUpdate.proposedAnswer || '').trim()
+    const updatedWords = getAssociationWords().map((word) => {
+      if (Number(word.id) !== Number(reviewUpdate.contentItemId)) {
+        return word
+      }
+
+      return {
+        ...word,
+        acceptedAnswers: expandAcceptedAnswersForValue(word.word, [
+          ...(Array.isArray(word.acceptedAnswers) ? word.acceptedAnswers : []),
+          nextAnswer,
+        ]),
+      }
+    })
+
+    saveAssociationWords(updatedWords)
+  }
 }
 
 export const getDashboardStats = () => {
