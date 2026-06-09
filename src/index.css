@@ -603,6 +603,44 @@ input,
   justify-content: center;
 }
 
+.google-auth-fallback-btn {
+  width: 100%;
+  min-height: 56px;
+  padding: 0 16px;
+  border-radius: 16px;
+  border: 1px solid #dfe4eb;
+  background: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #334155;
+  font-weight: 700;
+  box-shadow: 0 10px 22px rgba(22, 32, 48, 0.04);
+}
+
+.google-auth-fallback-btn.disabled {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.google-auth-fallback-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef5ff;
+  color: #4a8fe7;
+  flex-shrink: 0;
+}
+
+.google-auth-fallback-copy {
+  line-height: 1.2;
+  text-align: center;
+}
+
 .auth-action-btn {
   min-height: 88px;
   padding: 14px 13px;
@@ -3268,14 +3306,15 @@ body.native-app.keyboard-open .bottom-nav {
   right: 18px;
   bottom: 18px;
   z-index: 60;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 12px;
+  width: min(360px, calc(100vw - 24px));
+  pointer-events: none;
 }
 
 
 .message-popup-trigger {
+  position: absolute;
+  right: 0;
+  bottom: 0;
   width: 52px;
   height: 52px;
   border: none;
@@ -3285,7 +3324,8 @@ body.native-app.keyboard-open .bottom-nav {
   display: grid;
   place-items: center;
   box-shadow: 0 16px 30px rgba(75, 150, 238, 0.28);
-  position: relative;
+  pointer-events: auto;
+  z-index: 2;
 }
 
 .message-popup-badge {
@@ -3307,8 +3347,11 @@ body.native-app.keyboard-open .bottom-nav {
 }
 
 .message-popup-window {
-  width: min(360px, calc(100vw - 24px));
-  max-height: min(72vh, 620px);
+  position: absolute;
+  right: 0;
+  bottom: 64px;
+  width: 100%;
+  max-height: min(72vh, calc(100dvh - 112px));
   border-radius: 24px;
   border: 1px solid #e5ebf3;
   background: rgba(255, 255, 255, 0.98);
@@ -3319,6 +3362,7 @@ body.native-app.keyboard-open .bottom-nav {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  pointer-events: auto;
 }
 
 .message-popup-header {
@@ -3369,6 +3413,7 @@ body.native-app.keyboard-open .bottom-nav {
 .message-popup-thread {
   padding: 16px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -3763,9 +3808,6 @@ body.native-app.keyboard-open .bottom-nav {
   .message-popup-root {
     right: 28px;
     bottom: 28px;
-  }
-
-  .message-popup-window {
     width: 380px;
   }
 }
@@ -4290,6 +4332,7 @@ body.native-app.keyboard-open .bottom-nav {
   .message-popup-root {
     right: 12px;
     bottom: calc(78px + 8px + env(safe-area-inset-bottom, 0px));
+    width: calc(100vw - 24px);
   }
 
   .home-page {
@@ -4297,7 +4340,6 @@ body.native-app.keyboard-open .bottom-nav {
   }
 
   .message-popup-window {
-    width: calc(100vw - 24px);
     max-height: min(68vh, 620px);
   }
 

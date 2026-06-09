@@ -8,7 +8,10 @@ import {
   getDateKey,
   resolveDailyChallenge,
 } from '../utils/content.js'
-import { expandAcceptedAnswersForValue } from '../../src/utils/localSmartMatching.js'
+import {
+  expandAcceptedAnswersForValue,
+  repairLegacyText,
+} from '../../src/utils/localSmartMatching.js'
 import {
   parseWordChainSubmissionContext,
   upsertApprovedWordChainNode,
@@ -37,8 +40,13 @@ const validatePassword = (password = '') => {
 
 const parseList = (value) =>
   (Array.isArray(value) ? value : [])
-    .map((item) => String(item || '').trim())
+    .map((item) => repairLegacyText(String(item || '').trim()))
     .filter(Boolean)
+
+const sanitizeSymbolInput = (value = '') => {
+  const repairedValue = repairLegacyText(String(value || '').trim())
+  return /^\?+$/.test(repairedValue) ? '' : repairedValue
+}
 
 const parseUniqueList = (value) => {
   const uniqueMap = new Map()
@@ -237,8 +245,8 @@ const mapAdminUser = (item) => ({
 
 const buildContentPayload = (type, payload = {}) => {
   if (type === 'association') {
-    const word = String(payload.word || '').trim()
-    const symbol = String(payload.symbol || '').trim()
+    const word = repairLegacyText(String(payload.word || '').trim())
+    const symbol = sanitizeSymbolInput(payload.symbol)
     const clues = parseList(payload.clues)
     const acceptedAnswers = buildExpandedAcceptedAnswers(word, [
       word,
@@ -253,11 +261,11 @@ const buildContentPayload = (type, payload = {}) => {
       values: {
         word,
         symbol: symbol || null,
-        category: String(payload.category || 'Priroda').trim() || 'Priroda',
-        difficulty: String(payload.difficulty || 'Lako').trim() || 'Lako',
+        category: repairLegacyText(String(payload.category || 'Priroda').trim()) || 'Priroda',
+        difficulty: repairLegacyText(String(payload.difficulty || 'Lako').trim()) || 'Lako',
         clues,
         hint:
-          String(payload.hint || '').trim() ||
+          repairLegacyText(String(payload.hint || '').trim()) ||
           `Pomisli na pojam ${word.toLowerCase()}.`,
         acceptedAnswers,
       },
@@ -266,7 +274,7 @@ const buildContentPayload = (type, payload = {}) => {
 
   if (type === 'logic') {
     const words = parseList(payload.words)
-    const answer = String(payload.answer || '').trim()
+    const answer = repairLegacyText(String(payload.answer || '').trim())
     const mode = LOGIC_MODES.has(payload.mode) ? payload.mode : 'concept'
     const acceptedAnswers = buildExpandedAcceptedAnswers(answer, [
       answer,
@@ -283,18 +291,18 @@ const buildContentPayload = (type, payload = {}) => {
         words,
         answer,
         hint:
-          String(payload.hint || '').trim() ||
+          repairLegacyText(String(payload.hint || '').trim()) ||
           'Pokusaj da pronadjes zajednicku osobinu.',
-        category: String(payload.category || 'Priroda').trim() || 'Priroda',
-        difficulty: String(payload.difficulty || 'Lako').trim() || 'Lako',
+        category: repairLegacyText(String(payload.category || 'Priroda').trim()) || 'Priroda',
+        difficulty: repairLegacyText(String(payload.difficulty || 'Lako').trim()) || 'Lako',
         acceptedAnswers,
       },
     }
   }
 
   if (type === 'relation') {
-    const leftWord = String(payload.leftWord || '').trim()
-    const rightWord = String(payload.rightWord || '').trim()
+    const leftWord = repairLegacyText(String(payload.leftWord || '').trim())
+    const rightWord = repairLegacyText(String(payload.rightWord || '').trim())
     const relation = RELATION_OPTIONS.has(payload.relation)
       ? payload.relation
       : 'Asocijacija'
@@ -309,10 +317,10 @@ const buildContentPayload = (type, payload = {}) => {
         rightWord,
         relation,
         hint:
-          String(payload.hint || '').trim() ||
+          repairLegacyText(String(payload.hint || '').trim()) ||
           'Pomisli kakav odnos imaju ova dva pojma.',
-        category: String(payload.category || 'Priroda').trim() || 'Priroda',
-        difficulty: String(payload.difficulty || 'Lako').trim() || 'Lako',
+        category: repairLegacyText(String(payload.category || 'Priroda').trim()) || 'Priroda',
+        difficulty: repairLegacyText(String(payload.difficulty || 'Lako').trim()) || 'Lako',
       },
     }
   }

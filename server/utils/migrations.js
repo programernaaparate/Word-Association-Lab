@@ -1,9 +1,31 @@
 import { getPool } from '../config/db.js'
-import { expandAcceptedAnswersForValue } from '../../src/utils/localSmartMatching.js'
+import {
+  expandAcceptedAnswersForValue,
+  repairLegacyText,
+} from '../../src/utils/localSmartMatching.js'
 import { backfillApprovedWordChainNodesFromSubmissions } from './wordChain.js'
 
 export const runMigrations = async () => {
   const pool = getPool()
+  const repairTextValue = (value = '') => repairLegacyText(String(value ?? ''))
+  const repairSymbolValue = (value = '') => {
+    const repairedValue = repairTextValue(value)
+    return /^\?+$/.test(repairedValue) ? '' : repairedValue
+  }
+  const parseJsonArray = (value) => {
+    if (Array.isArray(value)) {
+      return value
+    }
+
+    try {
+      const parsedValue = JSON.parse(String(value || '[]'))
+      return Array.isArray(parsedValue) ? parsedValue : []
+    } catch {
+      return []
+    }
+  }
+  const repairJsonArray = (value) =>
+    parseJsonArray(value).map((item) => repairTextValue(item)).filter(Boolean)
   const associationAcceptedAnswersBackfill = [['Dubler', ['kaskader']]]
   const associationHintBackfill = [
     ['Hormon', 'Hemijski signal koji upravlja mnogim procesima u tijelu.'],
@@ -230,6 +252,127 @@ export const runMigrations = async () => {
       'UPDATE association_words SET symbol = ? WHERE LOWER(word) = LOWER(?) AND (symbol IS NULL OR symbol = \'\')',
       [symbol, word]
     )
+  }
+
+  const [associationContentRows] = await pool.query(
+    'SELECT id, word, symbol, category, difficulty, clues_json, hint, accepted_answers_json FROM association_words'
+  )
+
+  for (const row of associationContentRows) {
+    const currentClues = parseJsonArray(row.clues_json)
+    const currentAcceptedAnswers = parseJsonArray(row.accepted_answers_json)
+    const nextWord = repairTextValue(row.word)
+    const nextSymbol = repairSymbolValue(row.symbol)
+    const nextCategory = repairTextValue(row.category)
+    const nextDifficulty = repairTextValue(row.difficulty)
+    const nextHint = repairTextValue(row.hint)
+    const nextClues = repairJsonArray(row.clues_json)
+    const nextAcceptedAnswers = repairJsonArray(row.accepted_answers_json)
+
+    const hasChanged =
+      nextWord !== String(row.word || '') ||
+      nextSymbol !== String(row.symbol || '') ||
+      nextCategory !== String(row.category || '') ||
+      nextDifficulty !== String(row.difficulty || '') ||
+      nextHint !== String(row.hint || '') ||
+      JSON.stringify(nextClues) !== JSON.stringify(currentClues) ||
+      JSON.stringify(nextAcceptedAnswers) !== JSON.stringify(currentAcceptedAnswers)
+
+    if (hasChanged) {
+      await pool.query(
+        `UPDATE association_words
+         SET word = ?, symbol = ?, category = ?, difficulty = ?, clues_json = ?, hint = ?, accepted_answers_json = ?
+         WHERE id = ?`,
+        [
+          nextWord,
+          nextSymbol || null,
+          nextCategory,
+          nextDifficulty,
+          JSON.stringify(nextClues),
+          nextHint,
+          JSON.stringify(nextAcceptedAnswers),
+          row.id,
+        ]
+      )
+    }
+  }
+
+  const [logicContentRows] = await pool.query(
+    'SELECT id, mode, words_json, answer, hint, category, difficulty, accepted_answers_json FROM logic_challenges'
+  )
+
+  for (const row of logicContentRows) {
+    const currentWords = parseJsonArray(row.words_json)
+    const currentAcceptedAnswers = parseJsonArray(row.accepted_answers_json)
+    const nextAnswer = repairTextValue(row.answer)
+    const nextHint = repairTextValue(row.hint)
+    const nextCategory = repairTextValue(row.category)
+    const nextDifficulty = repairTextValue(row.difficulty)
+    const nextWords = repairJsonArray(row.words_json)
+    const nextAcceptedAnswers = repairJsonArray(row.accepted_answers_json)
+
+    const hasChanged =
+      nextAnswer !== String(row.answer || '') ||
+      nextHint !== String(row.hint || '') ||
+      nextCategory !== String(row.category || '') ||
+      nextDifficulty !== String(row.difficulty || '') ||
+      JSON.stringify(nextWords) !== JSON.stringify(currentWords) ||
+      JSON.stringify(nextAcceptedAnswers) !== JSON.stringify(currentAcceptedAnswers)
+
+    if (hasChanged) {
+      await pool.query(
+        `UPDATE logic_challenges
+         SET words_json = ?, answer = ?, hint = ?, category = ?, difficulty = ?, accepted_answers_json = ?
+         WHERE id = ?`,
+        [
+          JSON.stringify(nextWords),
+          nextAnswer,
+          nextHint,
+          nextCategory,
+          nextDifficulty,
+          JSON.stringify(nextAcceptedAnswers),
+          row.id,
+        ]
+      )
+    }
+  }
+
+  const [relationContentRows] = await pool.query(
+    'SELECT id, left_word, right_word, relation, category, difficulty, hint FROM relation_challenges'
+  )
+
+  for (const row of relationContentRows) {
+    const nextLeftWord = repairTextValue(row.left_word)
+    const nextRightWord = repairTextValue(row.right_word)
+    const nextRelation = repairTextValue(row.relation)
+    const nextCategory = repairTextValue(row.category)
+    const nextDifficulty = repairTextValue(row.difficulty)
+    const nextHint = repairTextValue(row.hint)
+
+    const hasChanged =
+      nextLeftWord !== String(row.left_word || '') ||
+      nextRightWord !== String(row.right_word || '') ||
+      nextRelation !== String(row.relation || '') ||
+      nextCategory !== String(row.category || '') ||
+      nextDifficulty !== String(row.difficulty || '') ||
+      nextHint !== String(row.hint || '')
+
+    if (hasChanged) {
+      await pool.query(
+        `UPDATE relation_challenges
+         SET left_word = ?, right_word = ?, relation = ?, category = ?, difficulty = ?, hint = ?
+         WHERE id = ?`,
+        [
+          nextLeftWord,
+          nextRightWord,
+          nextRelation,
+          nextCategory,
+          nextDifficulty,
+          nextHint,
+          row.id,
+        ]
+      )
+    }
   }
 
   for (const [word, answersToAdd] of associationAcceptedAnswersBackfill) {

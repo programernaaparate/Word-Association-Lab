@@ -1,9 +1,47 @@
 import { query } from '../config/db.js'
-import { expandAcceptedAnswersForValue } from '../../src/utils/localSmartMatching.js'
+import {
+  expandAcceptedAnswersForValue,
+  repairLegacyText,
+} from '../../src/utils/localSmartMatching.js'
 
 export const ALL_CATEGORY = 'Sve'
 export const DAILY_REWARD = 500
 const APP_TIME_ZONE = 'Europe/Podgorica'
+
+const parseJsonArray = (value) => {
+  if (Array.isArray(value)) {
+    return value
+  }
+
+  if (value && typeof value === 'object') {
+    return Array.isArray(value.values) ? value.values : []
+  }
+
+  try {
+    const parsedValue = JSON.parse(value || '[]')
+
+    if (Array.isArray(parsedValue)) {
+      return parsedValue
+    }
+
+    if (parsedValue && typeof parsedValue === 'object') {
+      return Array.isArray(parsedValue.values) ? parsedValue.values : []
+    }
+
+    return []
+  } catch {
+    return []
+  }
+}
+
+const repairContentText = (value = '') => repairLegacyText(String(value ?? ''))
+const sanitizeSymbolValue = (value = '') => {
+  const repairedValue = repairContentText(value)
+  return /^\?+$/.test(repairedValue) ? '' : repairedValue
+}
+
+const repairJsonTextArray = (value) =>
+  parseJsonArray(value).map((item) => repairContentText(item)).filter(Boolean)
 
 const CONTENT_CONFIG = {
   association: {
@@ -11,37 +49,56 @@ const CONTENT_CONFIG = {
     select:
       'id, word, symbol, category, difficulty, clues_json, hint, accepted_answers_json',
     orderBy: 'id ASC',
-    mapRow: (item) => ({
-      id: item.id,
-      word: item.word,
-      symbol: item.symbol,
-      category: item.category,
-      difficulty: item.difficulty,
-      clues: parseJsonArray(item.clues_json),
-      hint: item.hint,
-      acceptedAnswers: expandAcceptedAnswersForValue(
-        item.word,
-        parseJsonArray(item.accepted_answers_json)
-      ),
-    }),
+    mapRow: (item) => {
+      const word = repairContentText(item.word)
+      const symbol = sanitizeSymbolValue(item.symbol)
+      const category = repairContentText(item.category)
+      const difficulty = repairContentText(item.difficulty)
+      const clues = repairJsonTextArray(item.clues_json)
+      const hint = repairContentText(item.hint)
+      const acceptedAnswers = expandAcceptedAnswersForValue(
+        word,
+        repairJsonTextArray(item.accepted_answers_json)
+      )
+
+      return {
+        id: item.id,
+        word,
+        symbol,
+        category,
+        difficulty,
+        clues,
+        hint,
+        acceptedAnswers,
+      }
+    },
   },
   logic: {
     table: 'logic_challenges',
     select: 'id, mode, words_json, answer, hint, category, difficulty, accepted_answers_json',
     orderBy: 'id ASC',
-    mapRow: (item) => ({
-      id: item.id,
-      mode: item.mode,
-      words: parseJsonArray(item.words_json),
-      answer: item.answer,
-      hint: item.hint,
-      category: item.category,
-      difficulty: item.difficulty,
-      acceptedAnswers: expandAcceptedAnswersForValue(
-        item.answer,
-        parseJsonArray(item.accepted_answers_json)
-      ),
-    }),
+    mapRow: (item) => {
+      const answer = repairContentText(item.answer)
+      const hint = repairContentText(item.hint)
+      const category = repairContentText(item.category)
+      const difficulty = repairContentText(item.difficulty)
+      const words = repairJsonTextArray(item.words_json)
+      const acceptedAnswers = expandAcceptedAnswersForValue(
+        answer,
+        repairJsonTextArray(item.accepted_answers_json)
+      )
+
+      return {
+        id: item.id,
+        mode: item.mode,
+        words,
+        answer,
+        hint,
+        category,
+        difficulty,
+        acceptedAnswers,
+      }
+    },
   },
   relation: {
     table: 'relation_challenges',
@@ -50,12 +107,12 @@ const CONTENT_CONFIG = {
     orderBy: 'id ASC',
     mapRow: (item) => ({
       id: item.id,
-      leftWord: item.left_word,
-      rightWord: item.right_word,
-      relation: item.relation,
-      category: item.category,
-      difficulty: item.difficulty,
-      hint: item.hint,
+      leftWord: repairContentText(item.left_word),
+      rightWord: repairContentText(item.right_word),
+      relation: repairContentText(item.relation),
+      category: repairContentText(item.category),
+      difficulty: repairContentText(item.difficulty),
+      hint: repairContentText(item.hint),
     }),
   },
 }
@@ -98,22 +155,6 @@ const dedupeContentItems = (type, items = []) => {
   })
 
   return Array.from(itemMap.values())
-}
-
-const parseJsonArray = (value) => {
-  if (Array.isArray(value)) {
-    return value
-  }
-
-  if (value && typeof value === 'object') {
-    return Array.isArray(value.values) ? value.values : []
-  }
-
-  try {
-    return JSON.parse(value || '[]')
-  } catch {
-    return []
-  }
 }
 
 const runSelect = async (sql, params = [], executor = null) => {

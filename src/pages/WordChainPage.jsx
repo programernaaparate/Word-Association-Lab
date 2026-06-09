@@ -69,7 +69,7 @@ const CHAIN_ALLOWED_NODES = {
   'Sport-Srednje': buildAllowedNodes(
     ['Utrka', 'Nadmetanje', 'Takmicenje'],
     ['Zastoj', 'Mirovanje', 'Pauza'],
-    ['Maraton', 'Start', 'Cilj', 'Staza']
+    ['Maraton', 'Start', 'Cilj', 'Staza', 'Brzina', 'Sprint', 'Atletika']
   ),
   'Sport-Tesko': buildAllowedNodes(
     ['Red', 'Samokontrola', 'Urednost'],
@@ -114,12 +114,12 @@ const CHAIN_ALLOWED_NODES = {
   'Priroda-Srednje': buildAllowedNodes(
     ['Vlaznost', 'Mokrota', 'Orosenost'],
     ['Susa', 'Suvoca', 'Isusenost'],
-    ['Kisa', 'Rosa', 'Oblak', 'Magla']
+    ['Kisa', 'Rosa', 'Oblak', 'Magla', 'Voda', 'Para', 'Kondenzacija']
   ),
   'Priroda-Tesko': buildAllowedNodes(
     ['Izlivanje', 'Eksplozija', 'Provala'],
     ['Mirovanje', 'Tisina', 'Zatisje'],
-    ['Vulkan', 'Lava', 'Krater', 'Pepeo']
+    ['Vulkan', 'Lava', 'Krater', 'Pepeo', 'Dinamit', 'Petarda', 'Detonacija']
   ),
   'Umjetnost-Lako': buildAllowedNodes(
     ['Melodija', 'Harmonija', 'Zvuk'],

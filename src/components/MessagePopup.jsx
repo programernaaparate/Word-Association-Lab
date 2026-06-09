@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import AppIcon from './AppIcon'
 import {
   getMessageContactsRequest,
@@ -9,6 +9,48 @@ import { getAuthToken, getCurrentUser } from '../utils/storage'
 
 const CONTACT_REFRESH_MS = 7000
 const THREAD_REFRESH_MS = 3500
+const SCROLLABLE_CONTAINER_SELECTORS = ['.app-screen', '.screen', '.page-content']
+
+const captureScrollSnapshot = () => {
+  if (typeof window === 'undefined') {
+    return { windowX: 0, windowY: 0, containers: [] }
+  }
+
+  const containers = SCROLLABLE_CONTAINER_SELECTORS.map((selector) => {
+    const element = document.querySelector(selector)
+
+    return element
+      ? {
+          selector,
+          top: element.scrollTop,
+          left: element.scrollLeft,
+        }
+      : null
+  }).filter(Boolean)
+
+  return {
+    windowX: window.scrollX,
+    windowY: window.scrollY,
+    containers,
+  }
+}
+
+const restoreScrollSnapshot = (snapshot) => {
+  if (!snapshot || typeof window === 'undefined') {
+    return
+  }
+
+  window.scrollTo(snapshot.windowX || 0, snapshot.windowY || 0)
+
+  ;(snapshot.containers || []).forEach((item) => {
+    const element = document.querySelector(item.selector)
+
+    if (element) {
+      element.scrollTop = item.top || 0
+      element.scrollLeft = item.left || 0
+    }
+  })
+}
 
 function MessagePopup() {
   const token = getAuthToken()
@@ -19,6 +61,7 @@ function MessagePopup() {
   const [messages, setMessages] = useState([])
   const [draft, setDraft] = useState('')
   const [error, setError] = useState('')
+  const scrollSnapshotRef = useRef(null)
 
   const selectedContact = useMemo(() => {
     if (!contacts.length) {
@@ -127,6 +170,26 @@ function MessagePopup() {
       window.clearInterval(intervalId)
     }
   }, [isOpen, selectedContact?.id, token])
+
+  useLayoutEffect(() => {
+    if (!scrollSnapshotRef.current) {
+      return undefined
+    }
+
+    const restore = () => restoreScrollSnapshot(scrollSnapshotRef.current)
+
+    restore()
+    const frameId = window.requestAnimationFrame(restore)
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+    }
+  }, [isOpen])
+
+  const handleToggleOpen = () => {
+    scrollSnapshotRef.current = captureScrollSnapshot()
+    setIsOpen((prev) => !prev)
+  }
 
   const handleSendMessage = async () => {
     if (!token || !selectedContact?.id || !draft.trim()) {
@@ -254,7 +317,7 @@ function MessagePopup() {
       <button
         className="message-popup-trigger"
         type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={handleToggleOpen}
         aria-label="Otvori poruke"
       >
         <AppIcon name="message" size={22} />
