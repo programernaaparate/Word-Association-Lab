@@ -10,7 +10,9 @@ import {
 } from '../utils/content.js'
 import {
   expandAcceptedAnswersForValue,
+  normalizeRegionalDisplayText,
   repairLegacyText,
+  sanitizeGameSymbol,
 } from '../../src/utils/localSmartMatching.js'
 import {
   parseWordChainSubmissionContext,
@@ -40,12 +42,11 @@ const validatePassword = (password = '') => {
 
 const parseList = (value) =>
   (Array.isArray(value) ? value : [])
-    .map((item) => repairLegacyText(String(item || '').trim()))
+    .map((item) => normalizeRegionalDisplayText(repairLegacyText(String(item || '').trim())))
     .filter(Boolean)
 
 const sanitizeSymbolInput = (value = '') => {
-  const repairedValue = repairLegacyText(String(value || '').trim())
-  return /^\?+$/.test(repairedValue) ? '' : repairedValue
+  return sanitizeGameSymbol(repairLegacyText(String(value || '').trim()))
 }
 
 const parseUniqueList = (value) => {
@@ -245,7 +246,7 @@ const mapAdminUser = (item) => ({
 
 const buildContentPayload = (type, payload = {}) => {
   if (type === 'association') {
-    const word = repairLegacyText(String(payload.word || '').trim())
+    const word = normalizeRegionalDisplayText(repairLegacyText(String(payload.word || '').trim()))
     const symbol = sanitizeSymbolInput(payload.symbol)
     const clues = parseList(payload.clues)
     const acceptedAnswers = buildExpandedAcceptedAnswers(word, [
@@ -261,11 +262,15 @@ const buildContentPayload = (type, payload = {}) => {
       values: {
         word,
         symbol: symbol || null,
-        category: repairLegacyText(String(payload.category || 'Priroda').trim()) || 'Priroda',
-        difficulty: repairLegacyText(String(payload.difficulty || 'Lako').trim()) || 'Lako',
+        category:
+          normalizeRegionalDisplayText(repairLegacyText(String(payload.category || 'Priroda').trim())) ||
+          'Priroda',
+        difficulty:
+          normalizeRegionalDisplayText(repairLegacyText(String(payload.difficulty || 'Lako').trim())) ||
+          'Lako',
         clues,
         hint:
-          repairLegacyText(String(payload.hint || '').trim()) ||
+          normalizeRegionalDisplayText(repairLegacyText(String(payload.hint || '').trim())) ||
           `Pomisli na pojam ${word.toLowerCase()}.`,
         acceptedAnswers,
       },
@@ -274,7 +279,8 @@ const buildContentPayload = (type, payload = {}) => {
 
   if (type === 'logic') {
     const words = parseList(payload.words)
-    const answer = repairLegacyText(String(payload.answer || '').trim())
+    const answer =
+      normalizeRegionalDisplayText(repairLegacyText(String(payload.answer || '').trim()))
     const mode = LOGIC_MODES.has(payload.mode) ? payload.mode : 'concept'
     const acceptedAnswers = buildExpandedAcceptedAnswers(answer, [
       answer,
@@ -291,18 +297,24 @@ const buildContentPayload = (type, payload = {}) => {
         words,
         answer,
         hint:
-          repairLegacyText(String(payload.hint || '').trim()) ||
+          normalizeRegionalDisplayText(repairLegacyText(String(payload.hint || '').trim())) ||
           'Pokusaj da pronadjes zajednicku osobinu.',
-        category: repairLegacyText(String(payload.category || 'Priroda').trim()) || 'Priroda',
-        difficulty: repairLegacyText(String(payload.difficulty || 'Lako').trim()) || 'Lako',
+        category:
+          normalizeRegionalDisplayText(repairLegacyText(String(payload.category || 'Priroda').trim())) ||
+          'Priroda',
+        difficulty:
+          normalizeRegionalDisplayText(repairLegacyText(String(payload.difficulty || 'Lako').trim())) ||
+          'Lako',
         acceptedAnswers,
       },
     }
   }
 
   if (type === 'relation') {
-    const leftWord = repairLegacyText(String(payload.leftWord || '').trim())
-    const rightWord = repairLegacyText(String(payload.rightWord || '').trim())
+    const leftWord =
+      normalizeRegionalDisplayText(repairLegacyText(String(payload.leftWord || '').trim()))
+    const rightWord =
+      normalizeRegionalDisplayText(repairLegacyText(String(payload.rightWord || '').trim()))
     const relation = RELATION_OPTIONS.has(payload.relation)
       ? payload.relation
       : 'Asocijacija'
@@ -317,10 +329,14 @@ const buildContentPayload = (type, payload = {}) => {
         rightWord,
         relation,
         hint:
-          repairLegacyText(String(payload.hint || '').trim()) ||
+          normalizeRegionalDisplayText(repairLegacyText(String(payload.hint || '').trim())) ||
           'Pomisli kakav odnos imaju ova dva pojma.',
-        category: repairLegacyText(String(payload.category || 'Priroda').trim()) || 'Priroda',
-        difficulty: repairLegacyText(String(payload.difficulty || 'Lako').trim()) || 'Lako',
+        category:
+          normalizeRegionalDisplayText(repairLegacyText(String(payload.category || 'Priroda').trim())) ||
+          'Priroda',
+        difficulty:
+          normalizeRegionalDisplayText(repairLegacyText(String(payload.difficulty || 'Lako').trim())) ||
+          'Lako',
       },
     }
   }

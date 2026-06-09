@@ -1,7 +1,9 @@
 import { query } from '../config/db.js'
 import {
   expandAcceptedAnswersForValue,
+  normalizeRegionalDisplayText,
   repairLegacyText,
+  sanitizeGameSymbol,
 } from '../../src/utils/localSmartMatching.js'
 
 export const ALL_CATEGORY = 'Sve'
@@ -34,11 +36,9 @@ const parseJsonArray = (value) => {
   }
 }
 
-const repairContentText = (value = '') => repairLegacyText(String(value ?? ''))
-const sanitizeSymbolValue = (value = '') => {
-  const repairedValue = repairContentText(value)
-  return /^\?+$/.test(repairedValue) ? '' : repairedValue
-}
+const repairContentText = (value = '') =>
+  normalizeRegionalDisplayText(repairLegacyText(String(value ?? '')))
+const sanitizeSymbolValue = (value = '') => sanitizeGameSymbol(value)
 
 const repairJsonTextArray = (value) =>
   parseJsonArray(value).map((item) => repairContentText(item)).filter(Boolean)

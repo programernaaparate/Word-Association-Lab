@@ -41,7 +41,89 @@ const REGIONAL_TEXT_REPLACEMENTS = [
   ['Ž', 'Z'],
   ['š', 's'],
   ['Š', 'S'],
+  ['а', 'a'],
+  ['А', 'A'],
+  ['б', 'b'],
+  ['Б', 'B'],
+  ['в', 'v'],
+  ['В', 'V'],
+  ['г', 'g'],
+  ['Г', 'G'],
+  ['д', 'd'],
+  ['Д', 'D'],
+  ['ђ', 'dj'],
+  ['Ђ', 'Dj'],
+  ['е', 'e'],
+  ['Е', 'E'],
+  ['ж', 'z'],
+  ['Ж', 'Z'],
+  ['з', 'z'],
+  ['З', 'Z'],
+  ['и', 'i'],
+  ['И', 'I'],
+  ['ј', 'j'],
+  ['Ј', 'J'],
+  ['к', 'k'],
+  ['К', 'K'],
+  ['л', 'l'],
+  ['Л', 'L'],
+  ['љ', 'lj'],
+  ['Љ', 'Lj'],
+  ['м', 'm'],
+  ['М', 'M'],
+  ['н', 'n'],
+  ['Н', 'N'],
+  ['њ', 'nj'],
+  ['Њ', 'Nj'],
+  ['о', 'o'],
+  ['О', 'O'],
+  ['п', 'p'],
+  ['П', 'P'],
+  ['р', 'r'],
+  ['Р', 'R'],
+  ['с', 's'],
+  ['С', 'S'],
+  ['т', 't'],
+  ['Т', 'T'],
+  ['ћ', 'c'],
+  ['Ћ', 'C'],
+  ['у', 'u'],
+  ['У', 'U'],
+  ['ф', 'f'],
+  ['Ф', 'F'],
+  ['х', 'h'],
+  ['Х', 'H'],
+  ['ц', 'c'],
+  ['Ц', 'C'],
+  ['ч', 'c'],
+  ['Ч', 'C'],
+  ['џ', 'dz'],
+  ['Џ', 'Dz'],
+  ['ш', 's'],
+  ['Ш', 'S'],
 ]
+
+const DISPLAY_TEXT_FIXUPS = [
+  [/mlijevni put/gi, 'mlijecni put'],
+  [/\?itanje/gi, 'citanje'],
+  [/\bairilica\b/gi, 'cirilica'],
+]
+
+const applyCaseAwareReplacement = (replacement = '', originalMatch = '') => {
+  if (!originalMatch) {
+    return replacement
+  }
+
+  if (originalMatch === originalMatch.toUpperCase()) {
+    return replacement.toUpperCase()
+  }
+
+  if (originalMatch[0] === originalMatch[0]?.toUpperCase()) {
+    return `${replacement.charAt(0).toUpperCase()}${replacement.slice(1)}`
+  }
+
+  return replacement
+}
 
 export const repairLegacyText = (value = '') => {
   let nextValue = String(value || '')
@@ -63,8 +145,25 @@ const transliterateRegionalText = (value = '') => {
   return nextValue
 }
 
+const applyDisplayTextFixups = (value = '') => {
+  let nextValue = String(value || '')
+
+  DISPLAY_TEXT_FIXUPS.forEach(([pattern, replacement]) => {
+    nextValue = nextValue.replace(pattern, (match) =>
+      applyCaseAwareReplacement(replacement, match)
+    )
+  })
+
+  return nextValue
+}
+
 export const normalizeRegionalDisplayText = (value = '') =>
-  transliterateRegionalText(repairLegacyText(value))
+  applyDisplayTextFixups(transliterateRegionalText(repairLegacyText(value)))
+
+export const sanitizeGameSymbol = (value = '') => {
+  const normalizedValue = normalizeRegionalDisplayText(value).trim()
+  return /^\?+$/.test(normalizedValue) ? '' : normalizedValue
+}
 
 const STATIC_TERM_ALIAS_GROUPS = [
   ['astronomija', 'nauka o svemiru', 'svemirska nauka'],

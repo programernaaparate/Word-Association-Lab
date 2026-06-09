@@ -11,7 +11,7 @@ import {
   evaluateSmartConceptAnswer,
   expandAcceptedAnswersForValue,
   normalizeRegionalDisplayText,
-  repairLegacyText,
+  sanitizeGameSymbol,
 } from './localSmartMatching'
 
 const DEFAULT_ASSOCIATION_WORDS = [
@@ -41,7 +41,7 @@ const DEFAULT_ASSOCIATION_WORDS = [
     symbol: '📚',
     category: 'Umjetnost',
     difficulty: 'Lako',
-    clues: ['Stranice', '?itanje', 'Biblioteka', 'Autor'],
+    clues: ['Stranice', 'Citanje', 'Biblioteka', 'Autor'],
     hint: 'Predmet koji citamo i iz koga ucimo ili uzivamo u prici.',
     acceptedAnswers: ['knjiga', 'roman'],
   },
@@ -379,6 +379,64 @@ const writeStorage = (key, value) => {
   setRawStorageValue(key, JSON.stringify(value))
 }
 
+const sanitizeStoredGameValue = (value, fieldName = '') => {
+  if (typeof value === 'string') {
+    return fieldName === 'symbol'
+      ? sanitizeGameSymbol(value)
+      : normalizeRegionalDisplayText(value)
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeStoredGameValue(item, fieldName))
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([nestedKey, nestedValue]) => [
+        nestedKey,
+        sanitizeStoredGameValue(nestedValue, nestedKey),
+      ])
+    )
+  }
+
+  return value
+}
+
+const STORED_GAME_TEXT_VERSION = '1'
+
+const migrateStoredGameText = () => {
+  if (!canUseBrowserStorage()) {
+    return
+  }
+
+  if (window.localStorage.getItem('storedGameTextVersion') === STORED_GAME_TEXT_VERSION) {
+    return
+  }
+
+  const keysToSanitize = [
+    'associationWords',
+    'logicChallenges',
+    'relationChallenges',
+    'activeSession',
+    'lastResult',
+    'gameSubmissions',
+    'gameHistory',
+    'wordChainApprovedNodes',
+    'dailyChallengeEntries',
+    'dailyChallengeOverride',
+  ]
+
+  keysToSanitize.forEach((key) => {
+    const currentValue = readStorage(key, undefined)
+
+    if (currentValue !== undefined) {
+      writeStorage(key, sanitizeStoredGameValue(currentValue))
+    }
+  })
+
+  setRawStorageValue('storedGameTextVersion', STORED_GAME_TEXT_VERSION)
+}
+
 const shuffleItems = (items = []) => {
   const nextItems = [...items]
 
@@ -426,7 +484,7 @@ const sanitizeTextArray = (values = []) =>
 const sanitizeContentItem = (item = {}) => ({
   ...item,
   word: normalizeRegionalDisplayText(item.word || ''),
-  symbol: repairLegacyText(item.symbol || ''),
+  symbol: sanitizeGameSymbol(item.symbol || ''),
   category: normalizeRegionalDisplayText(item.category || ''),
   difficulty: normalizeRegionalDisplayText(item.difficulty || ''),
   clue: normalizeRegionalDisplayText(item.clue || ''),
@@ -879,6 +937,7 @@ export const logoutUser = () => {
 }
 
 export const getAssociationWords = () => {
+  migrateStoredGameText()
   const defaultWords = mergeDefaultItems(
     DEFAULT_ASSOCIATION_WORDS,
     ASSOCIATION_CONTENT_MATRIX,
@@ -890,7 +949,7 @@ export const getAssociationWords = () => {
 }
 
 export const saveAssociationWords = (words) => {
-  writeStorage('associationWords', words)
+  writeStorage('associationWords', sanitizeStoredGameValue(words))
 }
 
 export const updateAssociationWord = (updatedWord) => {
@@ -908,6 +967,7 @@ export const deleteAssociationWord = (id) => {
 }
 
 export const getLogicChallenges = () => {
+  migrateStoredGameText()
   const defaultChallenges = mergeDefaultItems(
     DEFAULT_LOGIC_CHALLENGES,
     LOGIC_CONTENT_MATRIX,
@@ -925,7 +985,7 @@ export const getLogicChallenges = () => {
 }
 
 export const saveLogicChallenges = (challenges) => {
-  writeStorage('logicChallenges', challenges)
+  writeStorage('logicChallenges', sanitizeStoredGameValue(challenges))
 }
 
 export const updateLogicChallenge = (updatedChallenge) => {
@@ -947,6 +1007,7 @@ export const deleteLogicChallenge = (id) => {
 }
 
 export const getRelationChallenges = () => {
+  migrateStoredGameText()
   const defaultChallenges = mergeDefaultItems(
     DEFAULT_RELATION_CHALLENGES,
     RELATION_CONTENT_MATRIX,
@@ -966,7 +1027,7 @@ export const getRelationChallenges = () => {
 }
 
 export const saveRelationChallenges = (challenges) => {
-  writeStorage('relationChallenges', challenges)
+  writeStorage('relationChallenges', sanitizeStoredGameValue(challenges))
 }
 
 export const updateRelationChallenge = (updatedChallenge) => {
@@ -988,10 +1049,11 @@ export const deleteRelationChallenge = (id) => {
 }
 
 export const saveLastResult = (result) => {
-  writeStorage('lastResult', result)
+  writeStorage('lastResult', sanitizeStoredGameValue(result))
 }
 
 export const getLastResult = () => {
+  migrateStoredGameText()
   return readStorage('lastResult', null)
 }
 
@@ -1023,6 +1085,7 @@ const buildWordChainApprovedNodeKey = (node = {}) =>
   ].join('|')
 
 export const getWordChainApprovedNodes = () => {
+  migrateStoredGameText()
   const storedNodes = readStorage('wordChainApprovedNodes', [])
   return (Array.isArray(storedNodes) ? storedNodes : [])
     .map(sanitizeWordChainApprovedNode)
@@ -1144,11 +1207,12 @@ export const getWordChainApprovedNodesForRound = (
   )
 
 export const getGameSubmissions = () => {
+  migrateStoredGameText()
   return readStorage('gameSubmissions', [])
 }
 
 export const saveGameSubmissions = (submissions) => {
-  writeStorage('gameSubmissions', submissions)
+  writeStorage('gameSubmissions', sanitizeStoredGameValue(submissions))
 }
 
 export const addGameSubmission = (submission) => {
@@ -1246,7 +1310,7 @@ export const saveActiveSession = (session) => {
   const currentUser = getCurrentUser()
 
   writeStorage('activeSession', {
-    ...session,
+    ...sanitizeStoredGameValue(session),
     userId: session?.userId ?? currentUser?.id ?? null,
     username: session?.username ?? currentUser?.username ?? null,
     updatedAt: new Date().toISOString(),
@@ -1254,6 +1318,7 @@ export const saveActiveSession = (session) => {
 }
 
 export const getActiveSession = () => {
+  migrateStoredGameText()
   const session = readStorage('activeSession', null)
 
   if (!session) {
@@ -1558,6 +1623,7 @@ export const evaluateLogicAnswer = (challenge, actualAnswer) => {
 }
 
 export const getGameHistory = () => {
+  migrateStoredGameText()
   return readStorage('gameHistory', [])
 }
 
@@ -1583,7 +1649,7 @@ export const getCurrentUserGameHistory = () => {
 }
 
 export const saveGameHistory = (history) => {
-  writeStorage('gameHistory', history)
+  writeStorage('gameHistory', sanitizeStoredGameValue(history))
 }
 
 export const getPlayerProgressOverview = (history = getCurrentUserGameHistory()) => {

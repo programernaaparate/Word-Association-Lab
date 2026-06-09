@@ -132,24 +132,24 @@ const extraAssociations = [
 ]
 
 const extraAssociationsLocal = [
-  createAssociation('Ćelija', 'Nauka', 'Lako', ['Membrana', 'Jezgro', 'Tkivo', 'Organizam'], 'Osnovna jedinica živih bića.', ['ćelija', 'celija'], '🧫'),
+  createAssociation('Celija', 'Nauka', 'Lako', ['Membrana', 'Jezgro', 'Tkivo', 'Organizam'], 'Osnovna jedinica zivih bica.', ['celija', 'celija'], '🧫'),
   createAssociation('Kiseonik', 'Nauka', 'Srednje', ['Disanje', 'Gas', 'Vazduh', 'Element'], 'Hemijski element neophodan za disanje.', ['kiseonik'], '🫧'),
   createAssociation('Rukomet', 'Sport', 'Lako', ['Gol', 'Dvorana', 'Sedmerac', 'Lopta'], 'Ekipni sport u kojem se lopta baca rukom.', ['rukomet'], '🤾'),
-  createAssociation('Štafeta', 'Sport', 'Srednje', ['Tim', 'Palica', 'Predaja', 'Trka'], 'Trka u kojoj članovi tima predaju palicu.', ['štafeta', 'stafeta'], '🏁'),
-  createAssociation('Žanr', 'Film', 'Lako', ['Drama', 'Komedija', 'Horor', 'Vrsta'], 'Vrsta filma ili književnog djela.', ['žanr', 'zanr'], '🎞️'),
-  createAssociation('Režija', 'Film', 'Tesko', ['Vizija', 'Set', 'Kamera', 'Reditelj'], 'Vođenje i oblikovanje filmskog djela.', ['režija', 'rezija'], '🎥'),
-  createAssociation('Ćirilica', 'Istorija', 'Srednje', ['Slova', 'Pismo', 'Azbuka', 'Vuk'], 'Jedno od osnovnih slovenskih pisama.', ['ćirilica', 'cirilica'], '🔤'),
-  createAssociation('Pećina', 'Priroda', 'Lako', ['Stijena', 'Mrak', 'Podzemlje', 'Kapljice'], 'Prirodna šupljina u stijeni.', ['pećina', 'pecina'], '🪨'),
-  createAssociation('Šuma', 'Priroda', 'Srednje', ['Drveće', 'Lišće', 'Staza', 'Životinje'], 'Veliko područje obraslo drvećem.', ['šuma', 'suma'], '🌲'),
-  createAssociation('Pozorište', 'Umjetnost', 'Lako', ['Scena', 'Glumci', 'Publika', 'Predstava'], 'Mjesto i umjetnost izvođenja predstava.', ['pozorište', 'pozoriste'], '🎭'),
-  createAssociation('Računar', 'Tehnologija', 'Lako', ['Tastatura', 'Ekran', 'Procesor', 'Miš'], 'Elektronski uređaj za obradu podataka.', ['računar', 'racunar', 'kompjuter'], '💻'),
-  createAssociation('Mreža', 'Tehnologija', 'Srednje', ['Internet', 'Signal', 'Povezivanje', 'Server'], 'Sistem povezanih uređaja i veza.', ['mreža', 'mreza'], '🕸️'),
-  createAssociation('Ušće', 'Geografija', 'Srednje', ['Rijeka', 'More', 'Ulivanje', 'Delta'], 'Mjesto gdje se rijeka uliva u veću vodenu površinu.', ['ušće', 'usce'], '🌊'),
-  createAssociation('Poluostrvo', 'Geografija', 'Tesko', ['Kopno', 'More', 'Rt', 'Obala'], 'Kopno okruženo morem sa tri strane.', ['poluostrvo'], '🗺️'),
-  createAssociation('Čempres', 'Priroda', 'Lako', ['Drvo', 'Vitko', 'Mediteran', 'Četinari'], 'Visoko i usko drvo tamnozelenih grana.', ['čempres', 'cempres'], '🌳'),
-  createAssociation('Lozinka', 'Tehnologija', 'Lako', ['Prijava', 'Sigurnost', 'Šifra', 'Nalog'], 'Tajni niz znakova za pristup sistemu.', ['lozinka', 'šifra', 'sifra'], '🔐'),
-  createAssociation('Čitač', 'Tehnologija', 'Srednje', ['Kartica', 'Senzor', 'Ulaz', 'Uređaj'], 'Uređaj koji prepoznaje i očitava podatke.', ['čitač', 'citac'], '📟'),
-  createAssociation('Žubor', 'Priroda', 'Tesko', ['Voda', 'Potok', 'Zvuk', 'Tok'], 'Blag i neprekidan zvuk tekuće vode.', ['žubor', 'zubor'], '💧'),
+  createAssociation('Stafeta', 'Sport', 'Srednje', ['Tim', 'Palica', 'Predaja', 'Trka'], 'Trka u kojoj clanovi tima predaju palicu.', ['stafeta', 'stafeta'], '🏁'),
+  createAssociation('Zanr', 'Film', 'Lako', ['Drama', 'Komedija', 'Horor', 'Vrsta'], 'Vrsta filma ili knjizevnog djela.', ['zanr', 'zanr'], '🎞️'),
+  createAssociation('Rezija', 'Film', 'Tesko', ['Vizija', 'Set', 'Kamera', 'Reditelj'], 'Vodjenje i oblikovanje filmskog djela.', ['rezija', 'rezija'], '🎥'),
+  createAssociation('Cirilica', 'Istorija', 'Srednje', ['Slova', 'Pismo', 'Azbuka', 'Vuk'], 'Jedno od osnovnih slovenskih pisama.', ['cirilica', 'cirilica'], '🔤'),
+  createAssociation('Pecina', 'Priroda', 'Lako', ['Stijena', 'Mrak', 'Podzemlje', 'Kapljice'], 'Prirodna supljina u stijeni.', ['pecina', 'pecina'], '🪨'),
+  createAssociation('Suma', 'Priroda', 'Srednje', ['Drvece', 'Lisce', 'Staza', 'Zivotinje'], 'Veliko podrucje obraslo drvecem.', ['suma', 'suma'], '🌲'),
+  createAssociation('Pozoriste', 'Umjetnost', 'Lako', ['Scena', 'Glumci', 'Publika', 'Predstava'], 'Mjesto i umjetnost izvodjenja predstava.', ['pozoriste', 'pozoriste'], '🎭'),
+  createAssociation('Racunar', 'Tehnologija', 'Lako', ['Tastatura', 'Ekran', 'Procesor', 'Mis'], 'Elektronski uredjaj za obradu podataka.', ['racunar', 'racunar', 'kompjuter'], '💻'),
+  createAssociation('Mreza', 'Tehnologija', 'Srednje', ['Internet', 'Signal', 'Povezivanje', 'Server'], 'Sistem povezanih uredjaja i veza.', ['mreza', 'mreza'], '🕸️'),
+  createAssociation('Usce', 'Geografija', 'Srednje', ['Rijeka', 'More', 'Ulivanje', 'Delta'], 'Mjesto gdje se rijeka uliva u vecu vodenu povrsinu.', ['usce', 'usce'], '🌊'),
+  createAssociation('Poluostrvo', 'Geografija', 'Tesko', ['Kopno', 'More', 'Rt', 'Obala'], 'Kopno okruzeno morem sa tri strane.', ['poluostrvo'], '🗺️'),
+  createAssociation('Cempres', 'Priroda', 'Lako', ['Drvo', 'Vitko', 'Mediteran', 'Cetinari'], 'Visoko i usko drvo tamnozelenih grana.', ['cempres', 'cempres'], '🌳'),
+  createAssociation('Lozinka', 'Tehnologija', 'Lako', ['Prijava', 'Sigurnost', 'Sifra', 'Nalog'], 'Tajni niz znakova za pristup sistemu.', ['lozinka', 'sifra', 'sifra'], '🔐'),
+  createAssociation('Citac', 'Tehnologija', 'Srednje', ['Kartica', 'Senzor', 'Ulaz', 'Uredjaj'], 'Uredjaj koji prepoznaje i ocitava podatke.', ['citac', 'citac'], '📟'),
+  createAssociation('Zubor', 'Priroda', 'Tesko', ['Voda', 'Potok', 'Zvuk', 'Tok'], 'Blag i neprekidan zvuk tekuce vode.', ['zubor', 'zubor'], '💧'),
 ]
 
 const associationBoosts = [
@@ -210,7 +210,7 @@ const associationTopUps = [
 
   createAssociation('Izvor', 'Priroda', 'Srednje', ['Voda', 'Pocetak toka', 'Stijena', 'Potok'], 'Mjesto gdje voda prirodno izbija na povrsinu.'),
   createAssociation('Koral', 'Priroda', 'Srednje', ['More', 'Hrid', 'Kolonija', 'Organizam'], 'Morski organizam koji gradi grebene i zivi u kolonijama.'),
-  createAssociation('Erozija', 'Priroda', 'Tesko', ['Tlo', 'Voda', 'Trošenje', 'Oblikovanje'], 'Postepeno trošenje i odnošenje zemljista ili stijena.'),
+  createAssociation('Erozija', 'Priroda', 'Tesko', ['Tlo', 'Voda', 'Trosenje', 'Oblikovanje'], 'Postepeno trosenje i odnosenje zemljista ili stijena.'),
   createAssociation('Sediment', 'Priroda', 'Tesko', ['Naslage', 'Cestice', 'Talozenje', 'Dno'], 'Materijal koji se talozi na dnu vode ili tla.'),
 
   createAssociation('Trening', 'Sport', 'Srednje', ['Vjezba', 'Priprema', 'Forma', 'Napredak'], 'Plansko vjezbanje radi boljeg sportskog nastupa.'),

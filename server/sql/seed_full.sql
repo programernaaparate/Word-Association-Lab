@@ -109,7 +109,7 @@ VALUES
   ('More', 'Priroda', 'Srednje', JSON_ARRAY('Talas', 'So', 'Plaza', 'Obala'), 'Velika slana vodena povrsina.', JSON_ARRAY('more')),
   ('Vulkan', 'Priroda', 'Tesko', JSON_ARRAY('Lava', 'Krater', 'Erupcija', 'Pepeo'), 'Prirodna pojava povezana sa magmom i erupcijom.', JSON_ARRAY('vulkan')),
   ('Atom', 'Nauka', 'Lako', JSON_ARRAY('Jezgro', 'Elektron', 'Hemija', 'Cestica'), 'Osnovna jedinica materije.', JSON_ARRAY('atom')),
-  ('Galaksija', 'Nauka', 'Srednje', JSON_ARRAY('Zvijezde', 'Svemir', 'Mlijevni put', 'Orbita'), 'Ogromna grupa zvijezda i kosmickog materijala.', JSON_ARRAY('galaksija')),
+  ('Galaksija', 'Nauka', 'Srednje', JSON_ARRAY('Zvijezde', 'Svemir', 'Mlijecni put', 'Orbita'), 'Ogromna grupa zvijezda i kosmickog materijala.', JSON_ARRAY('galaksija')),
   ('Gravitacija', 'Nauka', 'Tesko', JSON_ARRAY('Pad', 'Privlacnost', 'Masa', 'Njutn'), 'Sila koja privlaci tijela jedno drugom.', JSON_ARRAY('gravitacija')),
   ('Fudbal', 'Sport', 'Lako', JSON_ARRAY('Gol', 'Stadion', 'Lopta', 'Sudija'), 'Sport koji se igra najcesce nogom i loptom.', JSON_ARRAY('fudbal')),
   ('Maraton', 'Sport', 'Srednje', JSON_ARRAY('42 kilometra', 'Izdrzljivost', 'Staza', 'Trkac'), 'Dugacka trkacka disciplina.', JSON_ARRAY('maraton')),

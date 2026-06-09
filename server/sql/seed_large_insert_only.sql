@@ -22,7 +22,7 @@ SELECT seed.word, seed.category, seed.difficulty, seed.clues_json, seed.hint, se
 FROM (
   SELECT 'Atom' AS word, 'Nauka' AS category, 'Lako' AS difficulty, '["Jezgro","Elektron","Hemija","Cestica"]' AS clues_json, 'Osnovna jedinica materije.' AS hint, '["atom"]' AS accepted_answers_json
   UNION ALL SELECT 'Mikroskop','Nauka','Lako','["Leca","Laboratorija","Uvecanje","Biologija"]','Uredjaj za posmatranje veoma sitnih struktura.','["mikroskop"]'
-  UNION ALL SELECT 'Galaksija','Nauka','Srednje','["Zvijezde","Svemir","Orbita","Mlijevni put"]','Ogromna grupa zvijezda i kosmickog materijala.','["galaksija"]'
+  UNION ALL SELECT 'Galaksija','Nauka','Srednje','["Zvijezde","Svemir","Orbita","Mlijecni put"]','Ogromna grupa zvijezda i kosmickog materijala.','["galaksija"]'
   UNION ALL SELECT 'Molekul','Nauka','Srednje','["Veza","Atom","Hemija","Supstanca"]','Skup povezanih atoma.','["molekul"]'
   UNION ALL SELECT 'Gravitacija','Nauka','Tesko','["Pad","Privlacnost","Masa","Njutn"]','Sila koja privlaci tijela jedno drugom.','["gravitacija"]'
   UNION ALL SELECT 'Genetika','Nauka','Tesko','["Nasljedje","DNK","Hromozom","Osobine"]','Oblast koja proucava nasljedjivanje osobina.','["genetika"]'
@@ -53,7 +53,7 @@ FROM (
   UNION ALL SELECT 'Simfonija','Umjetnost','Lako','["Orkestar","Dirigent","Stav","Muzika"]','Veliko muzicko djelo za orkestar.','["simfonija"]'
   UNION ALL SELECT 'Balet','Umjetnost','Lako','["Ples","Scena","Pokret","Muzika"]','Umjetnicka forma koja spaja ples i muziku.','["balet"]'
   UNION ALL SELECT 'Skulptura','Umjetnost','Srednje','["Klesanje","Mermer","Figura","Vajar"]','Umjetnicko djelo oblikovano u prostoru.','["skulptura"]'
-  UNION ALL SELECT 'Galerija','Umjetnost','Srednje','["Slike","Izlozba","Umjetnik","Posjetioci"]','Mjesto gdje se izlažu umjetnicka djela.','["galerija"]'
+  UNION ALL SELECT 'Galerija','Umjetnost','Srednje','["Slike","Izlozba","Umjetnik","Posjetioci"]','Mjesto gdje se izlazu umjetnicka djela.','["galerija"]'
   UNION ALL SELECT 'Perspektiva','Umjetnost','Tesko','["Dubina","Linije","Prostor","Slikarstvo"]','Likovni princip za prikaz prostora na ravnoj povrsini.','["perspektiva"]'
   UNION ALL SELECT 'Avangarda','Umjetnost','Tesko','["Eksperiment","Pravac","Novina","Umjetnost"]','Pravac koji pomjera granice tradicionalne umjetnosti.','["avangarda"]'
   UNION ALL SELECT 'Robot','Tehnologija','Lako','["Masina","Program","Senzor","Automatika"]','Pametna masina koja moze izvrsavati zadatke.','["robot"]'
@@ -77,7 +77,7 @@ SELECT seed.mode, seed.words_json, seed.answer, seed.hint, seed.category, seed.d
 FROM (
   SELECT 'concept' AS mode, '["Teleskop","Planeta","Zvijezda"]' AS words_json, 'Astronomija' AS answer, 'Pomisli na nauku koja prouceva svemir.' AS hint, 'Nauka' AS category, 'Lako' AS difficulty
   UNION ALL SELECT 'odd-one-out','["Proton","Elektron","Neutron","Fjord"]','Fjord','Tri pojma pripadaju atomu, jedan geografiji.','Nauka','Srednje'
-  UNION ALL SELECT 'concept','["DNK","Nasljedje","Hromozom"]','Genetika','Rjesenje je naucna oblast koja proučava nasljedjivanje.','Nauka','Tesko'
+  UNION ALL SELECT 'concept','["DNK","Nasljedje","Hromozom"]','Genetika','Rjesenje je naucna oblast koja proucava nasljedjivanje.','Nauka','Tesko'
   UNION ALL SELECT 'concept','["Gol","Lopta","Sudija"]','Fudbal','Rijesenje je popularan ekipni sport.','Sport','Lako'
   UNION ALL SELECT 'odd-one-out','["Sprint","Maraton","Skok","Reziser"]','Reziser','Tri pojma su sportske discipline.','Sport','Srednje'
   UNION ALL SELECT 'concept','["Plivanje","Biciklizam","Trcanje"]','Triatlon','Povezi tri discipline u jedan sport.','Sport','Tesko'

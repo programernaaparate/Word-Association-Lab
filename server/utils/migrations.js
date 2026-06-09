@@ -1,17 +1,17 @@
 import { getPool } from '../config/db.js'
 import {
   expandAcceptedAnswersForValue,
+  normalizeRegionalDisplayText,
   repairLegacyText,
+  sanitizeGameSymbol,
 } from '../../src/utils/localSmartMatching.js'
 import { backfillApprovedWordChainNodesFromSubmissions } from './wordChain.js'
 
 export const runMigrations = async () => {
   const pool = getPool()
-  const repairTextValue = (value = '') => repairLegacyText(String(value ?? ''))
-  const repairSymbolValue = (value = '') => {
-    const repairedValue = repairTextValue(value)
-    return /^\?+$/.test(repairedValue) ? '' : repairedValue
-  }
+  const repairTextValue = (value = '') =>
+    normalizeRegionalDisplayText(repairLegacyText(String(value ?? '')))
+  const repairSymbolValue = (value = '') => sanitizeGameSymbol(value)
   const parseJsonArray = (value) => {
     if (Array.isArray(value)) {
       return value
