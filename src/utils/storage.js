@@ -10,6 +10,7 @@ import {
   evaluateSmartAssociationAnswer,
   evaluateSmartConceptAnswer,
   expandAcceptedAnswersForValue,
+  normalizeRegionalDisplayText,
   repairLegacyText,
 } from './localSmartMatching'
 
@@ -50,7 +51,7 @@ const DEFAULT_ASSOCIATION_WORDS = [
     symbol: '🌌',
     category: 'Nauka',
     difficulty: 'Tesko',
-    clues: ['Zvijezde', 'Kosmos', 'Mliječni put', 'Svemir'],
+    clues: ['Zvijezde', 'Kosmos', 'Mlijecni put', 'Svemir'],
     hint: 'Ogromna skupina zvijezda, gasa i prasine u svemiru.',
     acceptedAnswers: ['galaksija'],
   },
@@ -262,6 +263,7 @@ const NATIVE_MIRRORED_KEYS = [
   'associationWords',
   'logicChallenges',
   'relationChallenges',
+  'wordChainApprovedNodes',
   'activeSession',
   'lastResult',
   'gameSubmissions',
@@ -412,28 +414,28 @@ const normalizeCategory = (category) => {
 }
 
 const normalizeText = (value = '') =>
-  repairLegacyText(value)
+  normalizeRegionalDisplayText(value)
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .trim()
 
 const sanitizeTextArray = (values = []) =>
-  (values || []).map((value) => repairLegacyText(value)).filter(Boolean)
+  (values || []).map((value) => normalizeRegionalDisplayText(value)).filter(Boolean)
 
 const sanitizeContentItem = (item = {}) => ({
   ...item,
-  word: repairLegacyText(item.word || ''),
+  word: normalizeRegionalDisplayText(item.word || ''),
   symbol: repairLegacyText(item.symbol || ''),
-  category: repairLegacyText(item.category || ''),
-  difficulty: repairLegacyText(item.difficulty || ''),
-  clue: repairLegacyText(item.clue || ''),
-  hint: repairLegacyText(item.hint || ''),
-  answer: repairLegacyText(item.answer || ''),
-  leftWord: repairLegacyText(item.leftWord || ''),
-  rightWord: repairLegacyText(item.rightWord || ''),
+  category: normalizeRegionalDisplayText(item.category || ''),
+  difficulty: normalizeRegionalDisplayText(item.difficulty || ''),
+  clue: normalizeRegionalDisplayText(item.clue || ''),
+  hint: normalizeRegionalDisplayText(item.hint || ''),
+  answer: normalizeRegionalDisplayText(item.answer || ''),
+  leftWord: normalizeRegionalDisplayText(item.leftWord || ''),
+  rightWord: normalizeRegionalDisplayText(item.rightWord || ''),
   acceptedAnswers: expandAcceptedAnswersForValue(
-    item.word || item.answer || '',
+    normalizeRegionalDisplayText(item.word || item.answer || ''),
     sanitizeTextArray(item.acceptedAnswers || [])
   ),
   clues: sanitizeTextArray(item.clues || []),
@@ -443,14 +445,14 @@ const sanitizeContentItem = (item = {}) => ({
 const sanitizeContentItems = (items = []) => (items || []).map(sanitizeContentItem)
 
 const sanitizeWordChainPreset = (preset = {}) => ({
-  id: repairLegacyText(preset.id || preset.centerWord || ''),
-  centerWord: repairLegacyText(preset.centerWord || ''),
-  category: repairLegacyText(preset.category || ''),
-  difficulty: repairLegacyText(preset.difficulty || ''),
+  id: normalizeRegionalDisplayText(preset.id || preset.centerWord || ''),
+  centerWord: normalizeRegionalDisplayText(preset.centerWord || ''),
+  category: normalizeRegionalDisplayText(preset.category || ''),
+  difficulty: normalizeRegionalDisplayText(preset.difficulty || ''),
   starterNodes: (preset.starterNodes || []).map((node) => ({
     ...node,
-    word: repairLegacyText(node.word || ''),
-    relation: repairLegacyText(node.relation || ''),
+    word: normalizeRegionalDisplayText(node.word || ''),
+    relation: normalizeRegionalDisplayText(node.relation || ''),
   })),
 })
 
@@ -465,9 +467,9 @@ const sanitizeWordChainPresetCollection = (value) => {
 const buildLogicChallengeMergeKey = (item = {}) =>
   [
     item.mode || 'concept',
-    repairLegacyText(item.answer || ''),
-    repairLegacyText(item.category || ''),
-    repairLegacyText(item.difficulty || ''),
+    normalizeRegionalDisplayText(item.answer || ''),
+    normalizeRegionalDisplayText(item.category || ''),
+    normalizeRegionalDisplayText(item.difficulty || ''),
     item.mode === 'odd-one-out' ? sanitizeTextArray(item.words || []).join('|') : '',
   ].join('-')
 
@@ -993,6 +995,154 @@ export const getLastResult = () => {
   return readStorage('lastResult', null)
 }
 
+const WORD_CHAIN_APPROVED_RELATIONS = ['Sinonim', 'Antonim', 'Asocijacija']
+
+const sanitizeWordChainApprovedNode = (node = {}) => {
+  const relation = WORD_CHAIN_APPROVED_RELATIONS.includes(node.relation) ? node.relation : ''
+
+  return {
+    id: Number(node.id || 0) || null,
+    centerWord: normalizeRegionalDisplayText(node.centerWord || ''),
+    candidateWord: normalizeRegionalDisplayText(node.candidateWord || ''),
+    relation,
+    category: normalizeRegionalDisplayText(node.category || ''),
+    difficulty: normalizeRegionalDisplayText(node.difficulty || ''),
+    approvedSubmissionId: Number(node.approvedSubmissionId || 0) || null,
+    createdAt: node.createdAt || new Date().toISOString(),
+    updatedAt: node.updatedAt || new Date().toISOString(),
+  }
+}
+
+const buildWordChainApprovedNodeKey = (node = {}) =>
+  [
+    normalizeText(node.centerWord || ''),
+    normalizeText(node.candidateWord || ''),
+    node.relation || '',
+    normalizeText(node.category || ''),
+    normalizeText(node.difficulty || ''),
+  ].join('|')
+
+export const getWordChainApprovedNodes = () => {
+  const storedNodes = readStorage('wordChainApprovedNodes', [])
+  return (Array.isArray(storedNodes) ? storedNodes : [])
+    .map(sanitizeWordChainApprovedNode)
+    .filter(
+      (item) =>
+        item.centerWord &&
+        item.candidateWord &&
+        WORD_CHAIN_APPROVED_RELATIONS.includes(item.relation) &&
+        item.category &&
+        item.difficulty
+    )
+}
+
+export const saveWordChainApprovedNodes = (nodes) => {
+  writeStorage(
+    'wordChainApprovedNodes',
+    (Array.isArray(nodes) ? nodes : [])
+      .map(sanitizeWordChainApprovedNode)
+      .filter(
+        (item) =>
+          item.centerWord &&
+          item.candidateWord &&
+          WORD_CHAIN_APPROVED_RELATIONS.includes(item.relation) &&
+          item.category &&
+          item.difficulty
+      )
+  )
+}
+
+export const upsertWordChainApprovedNode = (node = {}) => {
+  const sanitizedNode = sanitizeWordChainApprovedNode(node)
+
+  if (
+    !sanitizedNode.centerWord ||
+    !sanitizedNode.candidateWord ||
+    !WORD_CHAIN_APPROVED_RELATIONS.includes(sanitizedNode.relation) ||
+    !sanitizedNode.category ||
+    !sanitizedNode.difficulty
+  ) {
+    return
+  }
+
+  const nextKey = buildWordChainApprovedNodeKey(sanitizedNode)
+  const existingNodes = getWordChainApprovedNodes()
+  let matched = false
+  let changed = false
+
+  const nextNodes = existingNodes.map((item) => {
+    if (buildWordChainApprovedNodeKey(item) !== nextKey) {
+      return item
+    }
+
+    matched = true
+    const nextItem = {
+      ...item,
+      ...sanitizedNode,
+      id: sanitizedNode.id || item.id,
+      approvedSubmissionId: sanitizedNode.approvedSubmissionId || item.approvedSubmissionId,
+      createdAt: item.createdAt || sanitizedNode.createdAt,
+      updatedAt: sanitizedNode.updatedAt || new Date().toISOString(),
+    }
+
+    if (JSON.stringify(nextItem) !== JSON.stringify(item)) {
+      changed = true
+    }
+
+    return nextItem
+  })
+
+  if (!matched) {
+    changed = true
+    nextNodes.unshift(sanitizedNode)
+  }
+
+  if (changed) {
+    saveWordChainApprovedNodes(nextNodes)
+  }
+}
+
+export const getWordChainApprovedNodesForRound = (
+  centerWord = '',
+  category = '',
+  difficulty = ''
+) =>
+  WORD_CHAIN_APPROVED_RELATIONS.reduce(
+    (accumulator, relation) => {
+      const seenWords = new Set()
+      const words = []
+
+      getWordChainApprovedNodes()
+        .filter(
+          (item) =>
+            item.relation === relation &&
+            normalizeText(item.centerWord) === normalizeText(centerWord) &&
+            normalizeText(item.category) === normalizeText(category) &&
+            normalizeText(item.difficulty) === normalizeText(difficulty)
+        )
+        .forEach((item) => {
+          const normalizedCandidateWord = normalizeText(item.candidateWord)
+
+          if (!normalizedCandidateWord || seenWords.has(normalizedCandidateWord)) {
+            return
+          }
+
+          seenWords.add(normalizedCandidateWord)
+          words.push(item.candidateWord)
+        })
+
+      return {
+        ...accumulator,
+        [relation]: words,
+      }
+    },
+    {
+      Sinonim: [],
+      Antonim: [],
+      Asocijacija: [],
+    }
+  )
+
 export const getGameSubmissions = () => {
   return readStorage('gameSubmissions', [])
 }
@@ -1070,6 +1220,10 @@ export const applyReviewSubmissionDecisionLocally = (reviewUpdate = {}) => {
     })
 
     saveAssociationWords(updatedWords)
+  }
+
+  if (reviewUpdate.status === 'approved' && reviewUpdate.wordChainApproval) {
+    upsertWordChainApprovedNode(reviewUpdate.wordChainApproval)
   }
 }
 
@@ -1541,6 +1695,7 @@ export const clearAllAppData = () => {
     'associationWords',
     'logicChallenges',
     'relationChallenges',
+    'wordChainApprovedNodes',
     'activeSession',
     'lastResult',
     'gameSubmissions',

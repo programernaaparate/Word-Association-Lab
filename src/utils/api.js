@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core'
+import { normalizeRegionalDisplayText } from './localSmartMatching'
 
 const LAST_SUCCESSFUL_API_BASE_KEY = 'lastSuccessfulApiBaseUrl'
 
@@ -100,6 +101,24 @@ const getCandidateApiBaseUrls = () => {
 
 const getPrimaryApiBaseUrl = () => getCandidateApiBaseUrls()[0] || 'http://localhost:4000/api'
 
+const normalizeApiPayload = (value) => {
+  if (typeof value === 'string') {
+    return normalizeRegionalDisplayText(value)
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(normalizeApiPayload)
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nestedValue]) => [key, normalizeApiPayload(nestedValue)])
+    )
+  }
+
+  return value
+}
+
 const parseResponse = async (response) => {
   const data = await response.json().catch(() => ({}))
 
@@ -107,7 +126,7 @@ const parseResponse = async (response) => {
     throw new Error(data.message || 'Doslo je do greske pri komunikaciji sa serverom.')
   }
 
-  return data
+  return normalizeApiPayload(data)
 }
 
 const isNetworkError = (error) => {
@@ -255,6 +274,9 @@ export const getLogicContentRequest = (params) =>
 
 export const getRelationContentRequest = (params) =>
   apiRequest(`/content/relation${buildQueryString(params)}`)
+
+export const getWordChainApprovedNodesRequest = (params) =>
+  apiRequest(`/content/word-chain-approved${buildQueryString(params)}`)
 
 export const getDailyChallengeRequest = (token, params) =>
   apiRequest(`/content/daily${buildQueryString(params)}`, {

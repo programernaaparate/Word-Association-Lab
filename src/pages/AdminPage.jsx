@@ -1010,7 +1010,7 @@ function AdminPage() {
             className="admin-textarea"
             value={currentCreateForm.acceptedAnswersText || ''}
             onChange={(event) => updateCreateFormField('acceptedAnswersText', event.target.value)}
-            placeholder="lozinka, sifra, šifra"
+            placeholder="lozinka, sifra, sifra"
           />
 
           <label htmlFor="admin-create-logic-hint">Pomoc</label>

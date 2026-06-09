@@ -1,5 +1,6 @@
 import { getPool } from '../config/db.js'
 import { expandAcceptedAnswersForValue } from '../../src/utils/localSmartMatching.js'
+import { backfillApprovedWordChainNodesFromSubmissions } from './wordChain.js'
 
 export const runMigrations = async () => {
   const pool = getPool()
@@ -10,7 +11,7 @@ export const runMigrations = async () => {
   const logicHintBackfill = [
     ['Hormon', 'Hemijski signal koji upravlja mnogim procesima u tijelu.'],
   ]
-  const logicAcceptedAnswersBackfill = [['Lozinka', ['lozinka', 'šifra', 'sifra']]]
+  const logicAcceptedAnswersBackfill = [['Lozinka', ['lozinka', 'sifra']]]
   const associationSymbolBackfill = [
     ['Sunce', '☀️'],
     ['More', '🌊'],
@@ -388,6 +389,29 @@ export const runMigrations = async () => {
   )
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS word_chain_approved_nodes (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      center_word VARCHAR(120) NOT NULL,
+      center_word_normalized VARCHAR(120) NOT NULL,
+      candidate_word VARCHAR(120) NOT NULL,
+      candidate_word_normalized VARCHAR(120) NOT NULL,
+      relation ENUM('Sinonim', 'Antonim', 'Asocijacija') NOT NULL,
+      category VARCHAR(80) NOT NULL,
+      difficulty VARCHAR(40) NOT NULL,
+      approved_submission_id INT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY unique_word_chain_approved_node (
+        center_word_normalized,
+        candidate_word_normalized,
+        relation,
+        category,
+        difficulty
+      )
+    )
+  `)
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS daily_challenge_completions (
       id INT AUTO_INCREMENT PRIMARY KEY,
       user_id INT NOT NULL,
@@ -416,4 +440,6 @@ export const runMigrations = async () => {
         FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `)
+
+  await backfillApprovedWordChainNodesFromSubmissions(pool)
 }

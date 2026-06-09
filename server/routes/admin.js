@@ -9,6 +9,10 @@ import {
   resolveDailyChallenge,
 } from '../utils/content.js'
 import { expandAcceptedAnswersForValue } from '../../src/utils/localSmartMatching.js'
+import {
+  parseWordChainSubmissionContext,
+  upsertApprovedWordChainNode,
+} from '../utils/wordChain.js'
 
 const router = Router()
 
@@ -160,6 +164,26 @@ const mapSubmission = (item) => ({
 })
 
 const enrichSubmission = async (submission) => {
+  const wordChainContext = parseWordChainSubmissionContext({
+    gameType: submission?.type,
+    content: submission?.content,
+    proposedAnswer: submission?.proposedAnswer,
+  })
+
+  if (submission?.submissionKind === 'answer_review' && wordChainContext) {
+    return {
+      ...submission,
+      contentTarget: {
+        title: wordChainContext.centerWord,
+        subtitle: `${wordChainContext.relation} / ${wordChainContext.category} / ${wordChainContext.difficulty}`,
+        category: wordChainContext.category,
+        difficulty: wordChainContext.difficulty,
+      },
+      requestedAction: `Dodaj ${wordChainContext.relation.toLowerCase()} "${wordChainContext.candidateWord}" za centar "${wordChainContext.centerWord}".`,
+      wordChainContext,
+    }
+  }
+
   if (
     submission?.submissionKind === 'answer_review' &&
     (!submission?.contentType || !submission?.contentItemId)
@@ -737,7 +761,7 @@ router.patch('/submissions/:id/status', async (req, res) => {
   }
 
   const [existingSubmission] = await query(
-    `SELECT id, user_id, user_label, game_type, status, submission_kind, content_type, content_item_id, proposed_answer, points, reward_granted
+    `SELECT id, user_id, user_label, game_type, content, status, submission_kind, content_type, content_item_id, proposed_answer, points, reward_granted
      FROM game_submissions
      WHERE id = ?
      LIMIT 1`,
@@ -770,6 +794,36 @@ router.patch('/submissions/:id/status', async (req, res) => {
         Number(existingSubmission.content_item_id)
       )
     }
+
+    const parsedWordChainContext = parseWordChainSubmissionContext({
+      gameType: existingSubmission.game_type,
+      content: existingSubmission.content,
+      proposedAnswer: existingSubmission.proposed_answer,
+    })
+
+    if (
+      nextStatus === 'approved' &&
+      existingSubmission.submission_kind === 'answer_review' &&
+      parsedWordChainContext
+    ) {
+      await upsertApprovedWordChainNode(
+        {
+          ...parsedWordChainContext,
+          approvedSubmissionId: submissionId,
+        },
+        connection
+      )
+    }
+
+    const resolvedContentTarget =
+      contentTarget ||
+      (parsedWordChainContext
+        ? {
+            title: parsedWordChainContext.centerWord,
+            category: parsedWordChainContext.category,
+            difficulty: parsedWordChainContext.difficulty,
+          }
+        : null)
 
     if (
       nextStatus === 'approved' &&
@@ -837,8 +891,8 @@ router.patch('/submissions/:id/status', async (req, res) => {
           rewardPoints,
           rewardPoints,
           rewardPoints,
-          contentTarget?.category || null,
-          contentTarget?.difficulty || null,
+          resolvedContentTarget?.category || null,
+          resolvedContentTarget?.difficulty || null,
         ]
       )
 
@@ -891,7 +945,7 @@ router.patch('/submissions/:id/status', async (req, res) => {
       const reviewMessage = buildSubmissionStatusMessage({
         status: nextStatus,
         submission: existingSubmission,
-        contentTarget,
+        contentTarget: resolvedContentTarget,
         rewardGrantedNow: shouldGrantReward,
         rewardPoints,
       })

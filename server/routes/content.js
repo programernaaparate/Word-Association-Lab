@@ -7,6 +7,10 @@ import {
   getDateKey,
   resolveDailyChallenge,
 } from '../utils/content.js'
+import {
+  buildWordChainApprovedNodeGroups,
+  getApprovedWordChainNodes,
+} from '../utils/wordChain.js'
 
 const router = Router()
 
@@ -34,6 +38,18 @@ router.get('/relation', async (req, res) => {
 
   return res.json({
     items: rows,
+  })
+})
+
+router.get('/word-chain-approved', async (req, res) => {
+  const centerWord = String(req.query.centerWord || '').trim()
+  const category = String(req.query.category || '').trim()
+  const difficulty = String(req.query.difficulty || '').trim()
+  const items = await getApprovedWordChainNodes({ centerWord, category, difficulty })
+
+  return res.json({
+    items,
+    grouped: buildWordChainApprovedNodeGroups(items),
   })
 })
 

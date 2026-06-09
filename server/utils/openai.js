@@ -173,7 +173,7 @@ export const evaluateWordChainNodeWithAi = async ({
   return createStructuredOpenAiResponse({
     schemaName: 'word_chain_node_evaluation',
     instructions:
-      'Ti procjenjujes da li nova rijec ima smisla u igri "Lanac rijeci". Budi konzervativan ali ne krut: prihvati rijec samo ako zaista ima smislen odnos sa centralnim pojmom za trazeni tip veze. Primjeri sluze kao orijentacija za ton veze u igri. Vrati samo JSON po zadatoj semi.',
+      'Ti procjenjujes da li nova rijec ima smisla u igri "Lanac rijeci". Budi konzervativan ali ne krut: prihvati rijec ako zaista ima prirodan i jasan odnos sa centralnim pojmom za trazeni tip veze. Za asocijaciju prihvati i sire, ali i dalje logicne veze kao uzrok-posljedica, materijal-pojava, dio-cjelina, pojam-okruzenje ili vrlo blizak prirodni kontekst. Primjeri sluze samo kao orijentacija za ton veze u igri, ne kao jedina dozvoljena rijec. Vrati samo JSON po zadatoj semi.',
     input: [
       {
         role: 'user',

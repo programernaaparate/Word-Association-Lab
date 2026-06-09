@@ -53,6 +53,67 @@ const mergeRelationPools = (primaryItems = [], fallbackItems = []) => {
 const buildRelationChallengeKey = (item = {}) =>
   `${item.leftWord || ''}-${item.rightWord || ''}-${item.relation || ''}-${item.category || ''}-${item.difficulty || ''}`
 
+const normalizeRelationHintText = (value) => String(value || '').trim()
+
+const GENERIC_RELATION_HINT_PATTERNS = [
+  /rijeci imaju slicno/i,
+  /isto znacenje/i,
+  /suprotno znacenje/i,
+  /suprotan smisao/i,
+  /pomisli na suprotn/i,
+  /pogledaj da li su pojmovi/i,
+  /logicki povez/i,
+  /prirodno povezu/i,
+  /nijesu isti ni suprotni/i,
+  /jedna rijec negira/i,
+  /pojmovi pokazuju suprotne strane/i,
+]
+
+const hasSpecificStoredRelationHint = (hint = '') => {
+  const cleanHint = normalizeRelationHintText(hint)
+
+  if (!cleanHint) {
+    return false
+  }
+
+  return !GENERIC_RELATION_HINT_PATTERNS.some((pattern) => pattern.test(cleanHint))
+}
+
+const buildRelationHintText = (challenge) => {
+  if (!challenge) {
+    return 'Pogledaj da li su pojmovi slicni, suprotni ili samo smisleno povezani.'
+  }
+
+  const leftWord = normalizeRelationHintText(challenge.leftWord) || 'prvi pojam'
+  const rightWord = normalizeRelationHintText(challenge.rightWord) || 'drugi pojam'
+  const relation = normalizeRelationHintText(challenge.relation)
+  const category = normalizeRelationHintText(challenge.category)
+  const storedHint = normalizeRelationHintText(challenge.hint)
+
+  const relationGuide =
+    relation === 'Sinonim'
+      ? `Probaj da zamislis recenicu u kojoj bi "${leftWord}" i "${rightWord}" mogli da se zamijene bez velike promjene znacenja.`
+      : relation === 'Antonim'
+        ? `Provjeri da li "${leftWord}" i "${rightWord}" stoje kao dva suprotna pola iste osobine, stanja ili pravca.`
+        : `Provjeri da li "${leftWord}" i "${rightWord}" nijesu isto ni suprotno, ali prirodno idu zajedno u istoj temi, radnji ili prostoru.`
+
+  const relationCheckpoint =
+    relation === 'Sinonim'
+      ? 'Ako oba pojma zvuce prirodno uz isti opis, blizu si tacnog odgovora.'
+      : relation === 'Antonim'
+        ? 'Ako prisustvo jednog pojma gura drugi na suprotnu stranu, to je jak signal.'
+        : 'Ako dijele isti kontekst, ali ne mogu da zamijene jedan drugi, idi tim pravcem.'
+
+  const categoryHint =
+    category && category !== 'Sve' ? `Drzi se konteksta kategorije "${category}".` : ''
+
+  const extraHint = hasSpecificStoredRelationHint(storedHint)
+    ? `Dodatni trag: ${storedHint}`
+    : ''
+
+  return [relationGuide, relationCheckpoint, categoryHint, extraHint].filter(Boolean).join(' ')
+}
+
 const remapRelationSessionChallengesToPool = (sessionChallenges = [], poolChallenges = []) =>
   (sessionChallenges || [])
     .map((savedChallenge) => {
@@ -285,6 +346,7 @@ function RelationGamePage() {
   const currentChallenge = challenges[index]
   const hintAlreadyUsedForCurrentStep = hintUsedSteps.includes(index)
   const hintCount = hintUsedSteps.length
+  const relationHintText = useMemo(() => buildRelationHintText(currentChallenge), [currentChallenge])
   const displayScore = Math.max(0, score - BASE_SCORE)
   const canSubmit = Boolean(selectedRelation)
   const helpSections = [
@@ -648,7 +710,7 @@ function RelationGamePage() {
 
           {showHint && (
             <p className="muted small-text">
-              Pomoc: {currentChallenge?.hint || 'Pomisli na odnos izmedju pojmova.'}
+              Pomoc: {relationHintText}
             </p>
           )}
 

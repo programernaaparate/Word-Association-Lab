@@ -54,6 +54,27 @@ CREATE TABLE IF NOT EXISTS relation_challenges (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS word_chain_approved_nodes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  center_word VARCHAR(120) NOT NULL,
+  center_word_normalized VARCHAR(120) NOT NULL,
+  candidate_word VARCHAR(120) NOT NULL,
+  candidate_word_normalized VARCHAR(120) NOT NULL,
+  relation ENUM('Sinonim', 'Antonim', 'Asocijacija') NOT NULL,
+  category VARCHAR(80) NOT NULL,
+  difficulty VARCHAR(40) NOT NULL,
+  approved_submission_id INT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY unique_word_chain_approved_node (
+    center_word_normalized,
+    candidate_word_normalized,
+    relation,
+    category,
+    difficulty
+  )
+);
+
 CREATE TABLE IF NOT EXISTS game_history (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,

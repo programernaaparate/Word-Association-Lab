@@ -63,6 +63,9 @@ const transliterateRegionalText = (value = '') => {
   return nextValue
 }
 
+export const normalizeRegionalDisplayText = (value = '') =>
+  transliterateRegionalText(repairLegacyText(value))
+
 const STATIC_TERM_ALIAS_GROUPS = [
   ['astronomija', 'nauka o svemiru', 'svemirska nauka'],
   ['gravitacija', 'sila teze'],
@@ -308,6 +311,13 @@ const STATIC_TERM_ALIAS_GROUPS = [
   ['senzor', 'detektor'],
   ['teorija', 'naucno objasnjenje', 'naučno objašnjenje'],
   ['vitez', 'srednjovjekovni ratnik', 'srednjovekovni ratnik'],
+  ['vlaga', 'vlaznost', 'mokrota', 'orosenost', 'vlazno', 'mokro'],
+  ['susa', 'suvoca', 'isusenost', 'suvo', 'suv', 'suhoca', 'suhost'],
+  ['hladnoca', 'studen', 'led', 'hladno', 'hladan'],
+  ['toplota', 'vrucina', 'vrelina', 'toplo', 'vruce', 'zagrijanost'],
+  ['poraz', 'gubitak', 'neuspjeh', 'izgubljeno'],
+  ['tisina', 'muk', 'cutanje', 'bezvucnost', 'tiho'],
+  ['digitalno', 'elektronski', 'racunarski', 'kompjuterski'],
 ]
 
 const STATIC_RELATED_CONCEPT_GROUPS = [
@@ -349,6 +359,19 @@ const STATIC_RELATED_CONCEPT_GROUPS = [
   ],
   ['toplota', 'toplina', 'vrucina', 'vrućina', 'vrelina', 'temperatura', 'sunce', 'ljeto', 'vatra', 'energija'],
   ['umjetnost', 'muzika', 'simfonija', 'pozoriste', 'pozorište', 'teatar', 'skulptura', 'perspektiva'],
+  ['vlaga', 'vlaznost', 'mokrota', 'orosenost', 'voda', 'kisa', 'rosa', 'magla', 'oblak', 'para', 'kondenzacija'],
+  ['toplota', 'vrucina', 'vrelina', 'zagrijanost', 'temperatura', 'sunce', 'ljeto', 'vatra', 'plamen'],
+  ['muzika', 'melodija', 'harmonija', 'simfonija', 'nota', 'orkestar', 'ritam', 'zvuk'],
+  ['figura', 'oblik', 'silueta', 'forma', 'skulptura', 'crtez', 'kontura', 'vajar'],
+  ['dubina', 'prostornost', 'slojevitost', 'perspektiva', 'prostor', 'udaljenost', 'horizont', 'linije'],
+  ['program', 'softver', 'sistem', 'aplikacija', 'algoritam', 'kod', 'racunar', 'robot', 'automatizacija'],
+  ['logika', 'analiza', 'zakljucivanje', 'racunanje', 'algoritam', 'koraci', 'program'],
+  ['digitalno', 'elektronski', 'racunarski', 'mikrocip', 'procesor', 'podaci', 'signal'],
+  ['ostrvo', 'ada', 'ostrvce', 'arhipelag', 'more', 'obala', 'luka', 'kopno'],
+  ['pravac', 'smjer', 'kurs', 'kompas', 'orijentacija', 'koordinate', 'meridijan', 'putanja'],
+  ['kralj', 'vladar', 'monarh', 'kruna', 'dvor', 'prijesto', 'kraljevina'],
+  ['drevno', 'staro', 'antika', 'renesansa', 'civilizacija', 'istorija', 'spomenik'],
+  ['sporazum', 'dogovor', 'savez', 'pregovori', 'ambasada', 'ugovor', 'diplomatija'],
 ]
 
 const buildGroupsFromAcceptedAnswers = () => {
@@ -393,10 +416,35 @@ const buildGroupsFromWordChainPresets = (relationType) =>
       .filter((group) => group.length > 1)
   )
 
+const buildGroupsFromWordChainCenterFamilies = () =>
+  Object.values(DEFAULT_WORD_CHAIN_PRESETS)
+    .map((presets) => presets.map((preset) => preset.centerWord).filter(Boolean))
+    .filter((group) => group.length > 1)
+
+const buildGroupsFromWordChainRelationFamilies = (relationType) =>
+  Object.values(DEFAULT_WORD_CHAIN_PRESETS)
+    .map((presets) =>
+      presets
+        .flatMap((preset) =>
+          (preset.starterNodes || [])
+            .filter((node) => node.relation === relationType)
+            .map((node) => node.word)
+        )
+        .filter(Boolean)
+    )
+    .filter((group) => group.length > 1)
+
 const buildGroupsFromAssociationClues = () =>
   DEFAULT_ASSOCIATION_WORDS.map((item) => [item.word, ...(item.clues || [])]).filter(
     (group) => group.length > 1
   )
+
+const buildGroupsFromLogicChallengeWords = () =>
+  DEFAULT_LOGIC_CHALLENGES.filter((item) => item.mode === 'concept').map((item) => [
+    item.answer,
+    ...(item.words || []),
+    ...(item.acceptedAnswers || []),
+  ])
 
 const COMMON_ANSWER_PREFIXES = [
   'to je',
@@ -613,13 +661,18 @@ const isLikelyBrokenSplitVariant = (value = '', referenceAliases = []) => {
 const TERM_ALIAS_GROUPS = [
   ...STATIC_TERM_ALIAS_GROUPS,
   ...buildGroupsFromAcceptedAnswers(),
+  ...buildGroupsFromWordChainCenterFamilies(),
+  ...buildGroupsFromWordChainRelationFamilies('Sinonim'),
+  ...buildGroupsFromWordChainRelationFamilies('Antonim'),
   ...buildGroupsFromRelations('Sinonim'),
   ...buildGroupsFromWordChainPresets('Sinonim'),
 ]
 
 const RELATED_CONCEPT_GROUPS = [
   ...STATIC_RELATED_CONCEPT_GROUPS,
+  ...buildGroupsFromLogicChallengeWords(),
   ...buildGroupsFromRelations('Asocijacija'),
+  ...buildGroupsFromWordChainRelationFamilies('Asocijacija'),
   ...buildGroupsFromWordChainPresets('Asocijacija'),
   ...buildGroupsFromAssociationClues(),
 ]
@@ -722,10 +775,14 @@ const getRelatedConcepts = (values = []) => {
   const relatedConcepts = new Set()
 
   ;(values || []).forEach((value) => {
-    const normalizedValue = normalizeBaseText(value)
-    const group = RELATED_LOOKUP.get(normalizedValue) || []
-    group.forEach((item) => {
-      relatedConcepts.add(item)
+    const candidateVariants = [value, ...expandAliases(value)]
+
+    candidateVariants.forEach((variant) => {
+      const normalizedValue = normalizeBaseText(variant)
+      const group = RELATED_LOOKUP.get(normalizedValue) || []
+      group.forEach((item) => {
+        relatedConcepts.add(item)
+      })
     })
   })
 

@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { query } from '../config/db.js'
 import { requireAuth } from '../middleware/auth.js'
 import { getContentItemByTypeAndId } from '../utils/content.js'
+import { parseWordChainSubmissionContext } from '../utils/wordChain.js'
 
 const router = Router()
 
@@ -24,6 +25,11 @@ const buildReviewUpdate = async (item = {}) => {
   const contentItemId = Number(item.content_item_id || 0) || null
   const contentTarget =
     contentType && contentItemId ? await getContentItemByTypeAndId(contentType, contentItemId) : null
+  const wordChainApproval = parseWordChainSubmissionContext({
+    gameType: item.game_type,
+    content: item.content,
+    proposedAnswer: item.proposed_answer,
+  })
 
   return {
     id: item.id,
@@ -39,17 +45,21 @@ const buildReviewUpdate = async (item = {}) => {
     contentTitle:
       contentTarget?.word ||
       contentTarget?.answer ||
+      wordChainApproval?.centerWord ||
       (contentTarget ? `${contentTarget.leftWord || '?'} / ${contentTarget.rightWord || '?'}` : ''),
     contentSubtitle:
       contentTarget?.category && contentTarget?.difficulty
         ? `${contentTarget.category} / ${contentTarget.difficulty}`
+        : wordChainApproval
+          ? `${wordChainApproval.relation} / ${wordChainApproval.category} / ${wordChainApproval.difficulty}`
         : '',
+    wordChainApproval,
   }
 }
 
 router.get('/review-updates', requireAuth, async (req, res) => {
   const rows = await query(
-    `SELECT id, game_type, status, proposed_answer, content_type, content_item_id, points,
+    `SELECT id, game_type, content, status, proposed_answer, content_type, content_item_id, points,
             reward_granted, created_at, reviewed_at
      FROM game_submissions
      WHERE submission_kind = 'answer_review'

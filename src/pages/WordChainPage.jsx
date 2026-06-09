@@ -3,7 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import FirstRunTipCard from '../components/FirstRunTipCard'
 import GameHelpModal from '../components/GameHelpModal'
 import Navbar from '../components/Navbar'
-import { createSubmissionRequest, evaluateAiWordChainNodeRequest } from '../utils/api'
+import {
+  createSubmissionRequest,
+  evaluateAiWordChainNodeRequest,
+  getWordChainApprovedNodesRequest,
+} from '../utils/api'
 import { syncCompletedGame } from '../utils/gameSync'
 import {
   calculatePerformanceBonus,
@@ -19,9 +23,12 @@ import {
   getDifficulty,
   getNewUnlockedAchievements,
   getPlayerProgressOverview,
+  getWordChainApprovedNodesForRound,
   getWordChainPreset,
   saveActiveSession,
   saveLastResult,
+  STORAGE_CHANGE_EVENT,
+  upsertWordChainApprovedNode,
 } from '../utils/storage'
 import {
   playCelebrateSound,
@@ -30,6 +37,7 @@ import {
 } from '../utils/uiFeedback'
 
 const RELATION_OPTIONS = ['Sinonim', 'Antonim', 'Asocijacija']
+const WORD_CHAIN_APPROVED_POLL_MS = 6000
 
 const buildAllowedNodes = (synonyms = [], antonyms = [], associations = []) => ({
   Sinonim: synonyms,
@@ -184,6 +192,37 @@ const buildAllowedNodeIndex = (allowedNodes = {}) =>
     {}
   )
 
+const mergeAllowedNodeGroups = (...groups) =>
+  RELATION_OPTIONS.reduce(
+    (accumulator, relation) => {
+      const seenWords = new Set()
+      const words = []
+
+      groups.forEach((group) => {
+        ;(group?.[relation] || []).forEach((word) => {
+          const normalizedCandidate = normalizeWord(word)
+
+          if (!normalizedCandidate || seenWords.has(normalizedCandidate)) {
+            return
+          }
+
+          seenWords.add(normalizedCandidate)
+          words.push(word)
+        })
+      })
+
+      return {
+        ...accumulator,
+        [relation]: words,
+      }
+    },
+    {
+      Sinonim: [],
+      Antonim: [],
+      Asocijacija: [],
+    }
+  )
+
 const evaluateChain = (nodes, centerWord, difficulty, allowedNodes) => {
   const normalizedCenter = normalizeWord(centerWord)
   const allowedNodeIndex = buildAllowedNodeIndex(allowedNodes)
@@ -276,7 +315,7 @@ const evaluateChain = (nodes, centerWord, difficulty, allowedNodes) => {
 function WordChainPage() {
   const navigate = useNavigate()
   const token = getAuthToken()
-  const aiEvaluationEnabled = import.meta.env.VITE_ENABLE_AI_EVALUATION === 'true'
+  const aiEvaluationEnabled = import.meta.env.VITE_ENABLE_AI_EVALUATION !== 'false'
   const activeSession = getActiveSession()
   const isSavedWordChainSession = activeSession?.type === 'word-chain'
   const selectedDifficulty = getDifficulty()
@@ -298,7 +337,8 @@ function WordChainPage() {
   const presetCategory = chainPreset.category || (category === 'Sve' ? 'Priroda' : category)
   const categoryLabel = category === 'Sve' ? `Sve / ${presetCategory}` : presetCategory
   const presetKey = `${presetCategory}-${difficulty}`
-  const allowedNodes = CHAIN_ALLOWED_NODES[presetKey] || CHAIN_ALLOWED_NODES['Priroda-Srednje']
+  const presetAllowedNodes =
+    CHAIN_ALLOWED_NODES[presetKey] || CHAIN_ALLOWED_NODES['Priroda-Srednje']
   const starterNodesTemplate = useMemo(() => {
     if (
       isSavedWordChainSession &&
@@ -332,11 +372,79 @@ function WordChainPage() {
   const [reviewFeedback, setReviewFeedback] = useState('')
   const [isReviewSubmitting, setIsReviewSubmitting] = useState(false)
   const [showHelpModal, setShowHelpModal] = useState(false)
+  const [approvedNodes, setApprovedNodes] = useState(() =>
+    getWordChainApprovedNodesForRound(centerWord, presetCategory, difficulty)
+  )
   const [startedAt] = useState(
     isSavedWordChainSession
       ? activeSession.startedAt || new Date().toISOString()
       : new Date().toISOString()
   )
+  const allowedNodes = useMemo(
+    () => mergeAllowedNodeGroups(presetAllowedNodes, approvedNodes),
+    [approvedNodes, presetAllowedNodes]
+  )
+
+  useEffect(() => {
+    let isMounted = true
+
+    const syncStoredApprovedNodes = () => {
+      if (!isMounted) {
+        return
+      }
+
+      setApprovedNodes(getWordChainApprovedNodesForRound(centerWord, presetCategory, difficulty))
+    }
+
+    const hydrateApprovedNodes = async () => {
+      syncStoredApprovedNodes()
+
+      try {
+        const response = await getWordChainApprovedNodesRequest({
+          centerWord,
+          category: presetCategory,
+          difficulty,
+        })
+
+        ;(Array.isArray(response.items) ? response.items : []).forEach((item) => {
+          upsertWordChainApprovedNode(item)
+        })
+      } catch {
+        // Ako mreza kratko pukne, ostavljamo zadnji poznati lokalni skup.
+      } finally {
+        syncStoredApprovedNodes()
+      }
+    }
+
+    hydrateApprovedNodes()
+
+    const intervalId = window.setInterval(hydrateApprovedNodes, WORD_CHAIN_APPROVED_POLL_MS)
+    const handleStorageChange = (event) => {
+      if (!event?.detail?.key || event.detail.key === 'wordChainApprovedNodes') {
+        syncStoredApprovedNodes()
+      }
+    }
+    const handleFocus = () => {
+      hydrateApprovedNodes()
+    }
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        hydrateApprovedNodes()
+      }
+    }
+
+    window.addEventListener(STORAGE_CHANGE_EVENT, handleStorageChange)
+    window.addEventListener('focus', handleFocus)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      isMounted = false
+      window.clearInterval(intervalId)
+      window.removeEventListener(STORAGE_CHANGE_EVENT, handleStorageChange)
+      window.removeEventListener('focus', handleFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [centerWord, difficulty, presetCategory])
 
   const chainEvaluation = useMemo(
     () => evaluateChain(nodes, centerWord, difficulty, allowedNodes),

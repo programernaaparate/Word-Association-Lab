@@ -575,7 +575,7 @@ function HomePage() {
                   <small>
                     {hasContinuableSession
                       ? 'Vrati se tacno tamo gdje si stao'
-                      : 'Odmah uskoči u novu rundu'}
+                      : 'Odmah uskoci u novu rundu'}
                   </small>
                 </div>
               </button>
